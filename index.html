@@ -219,10 +219,12 @@
   .frSub{font-size:11px;line-height:1.6;color:#b9bec9}
   #frName{padding:13px;font-family:inherit;font-size:19px;font-weight:700;letter-spacing:.2em;text-align:center;
     text-transform:uppercase;background:#0f0d16;color:#fff;border:2px solid #4a4460;border-radius:4px}
-  #frGo{padding:14px;font-family:inherit;font-weight:700;font-size:15px;letter-spacing:.1em;color:#241c05;cursor:pointer;
+  #frCodeGo, #frGo{padding:14px;font-family:inherit;font-weight:700;font-size:15px;letter-spacing:.1em;color:#241c05;cursor:pointer;
     border:2px solid #0d0b10;border-radius:4px;background:linear-gradient(#ffe8a8,#f5c93b 45%,#c9a227 58%,#e8c250);
     box-shadow:inset 0 -2px 0 #8a6a12, 0 3px 0 #0d0b10}
-  #frGo:active{transform:translateY(2px);box-shadow:inset 0 -1px 0 #8a6a12, 0 1px 0 #0d0b10}
+  #frCodeGo:active, #frGo:active{transform:translateY(2px);box-shadow:inset 0 -1px 0 #8a6a12, 0 1px 0 #0d0b10}
+  #frCodeBox{display:flex;flex-direction:column;gap:9px}
+  #frCodeGo{font-size:13px}
   #frPass{padding:13px;font-family:inherit;font-size:17px;font-weight:700;letter-spacing:.3em;text-align:center;
     background:#0f0d16;color:#fff;border:2px solid #4a4460;border-radius:4px}
   #frMsg{font-size:11px;min-height:13px;color:#ff8a7a}
@@ -342,7 +344,15 @@
     <button id="frGo" class="big">CREATE ACCOUNT</button>
     <div id="frMsg"></div>
     <button id="frNew" class="frLink">Not you? Start a different account</button>
-    <div class="frFoot">Kept in this browser. Change the name later in the shop, under PROFILE.</div>
+    <button id="frHasCode" class="frLink">Moving from another copy? Paste your backup code</button>
+    <div id="frCodeBox" style="display:none">
+      <textarea id="frCode" rows="3" placeholder="Paste the backup code from the old copy"
+        style="width:100%;box-sizing:border-box;font:inherit;font-size:11px;background:#10131a;color:#cfd6e2;
+               border:1px solid #2a3140;border-radius:6px;padding:7px;resize:vertical"></textarea>
+      <button id="frCodeGo" class="big">RESTORE THIS ACCOUNT</button>
+    </div>
+    <div class="frFoot">Kept in this browser. A new copy of the game starts empty — take your backup code
+      from the old one (shop → PROFILE) and paste it here to carry everything over.</div>
   </div>
 </div>
 <div id="wrap">
@@ -1933,9 +1943,9 @@ const WALL_SHOP = [
   {id:'egypt',  n:'THE PYRAMIDS',  p:800,  d:'Giza, sand and all'},
   {id:'paris',  n:'PARIS',         p:900,  d:'The Eiffel Tower at dusk'},
   {id:'sydney', n:'SYDNEY',        p:1000, d:'Opera House and the bridge'},
-  {id:'newyork',n:'NEW YORK',      p:1200, lvl:9, d:'Skyline, harbour, big statue'},
-  {id:'fuji',   n:'MOUNT FUJI',    p:1400, lvl:14, d:'Blossom, torii, snow cap'},
-  {id:'rome',   n:'THE COLOSSEUM', p:1600, lvl:18, d:'Ancient Rome at midday'}
+  {id:'newyork',n:'NEW YORK',      p:1200, lvl:4, d:'Skyline, harbour, big statue'},
+  {id:'fuji',   n:'MOUNT FUJI',    p:1400, lvl:6, d:'Blossom, torii, snow cap'},
+  {id:'rome',   n:'THE COLOSSEUM', p:1600, lvl:8, d:'Ancient Rome at midday'}
 ];
 for (const w of WALL_SHOP) if (WALL_MAPS[w.id]) w.map = WALL_MAPS[w.id];
 const WALL_BY_ID = {}; for (const w of WALL_SHOP) WALL_BY_ID[w.id] = w;
@@ -2961,9 +2971,24 @@ const LEVELS = [
   {n:'NORMAL', tick:.028, gain:9,  timing:.9,  err:.28, aim:.004, jitter:.04, quick:290, air:true,  forceMax:470,
    steal:.8,  block:.8, react:.2,  intercept:.85, patience:.95},
   {n:'HARD',   tick:.016, gain:5,  timing:.96, err:.1,  aim:0,    jitter:0,   quick:330, air:true,  forceMax:560,
-   steal:.95, block:.97,react:.13, intercept:1,   patience:.7}
+   steal:.95, block:.97,react:.13, intercept:1,   patience:.7},
+  {n:'ELITE',  tick:.013, gain:4,  timing:.98, err:.07, aim:0,    jitter:0,   quick:350, air:true,  forceMax:600,
+   steal:.97, block:.98,react:.11, intercept:1.05,patience:.64},
+  {n:'ULTRA',  tick:.011, gain:3,  timing:.99, err:.05, aim:0,    jitter:0,   quick:368, air:true,  forceMax:632,
+   steal:.98, block:.99,react:.095,intercept:1.1, patience:.58}
 ];
 let level = 1;
+/* Who you face is decided by the tier you are on, not a setting: COAL meets EASY,
+   SILVER meets NORMAL, GOLD meets HARD, DIAMOND meets ELITE. The rung inside the
+   tier picks the bot's temperament, from a sloppy ROOKIE up to a cold ACE. */
+const TIER_LEVEL = [0, 1, 2, 3, 4];                       // COAL, SILVER, GOLD, DIAMOND, ULTRA G
+const DIFF_LADDER = [0, 1, 3, 2, 4];                      // ROOKIE, PEST, SHARK, SNIPER, ACE
+function applyRankDifficulty(){
+  if (typeof BOSS !== 'undefined' && BOSS) return;        // a boss brings his own
+  const lvl = myLevel();
+  level = isUltra(lvl) ? TIER_LEVEL[RANK_TIERS.length] : (TIER_LEVEL[rankTier(lvl)] || 0);
+  diff = DIFF_LADDER[clamp(Math.floor((lvl - 1)/2.5), 0, DIFF_LADDER.length - 1)];
+}
 /* a rung above HARD that only the ones you have to fight ever play at */
 const BOSS_LEVEL = {n:'BOSS', tick:.011, gain:4, timing:.99, err:.05, aim:0, jitter:0, quick:370, air:true,
                     forceMax:640, steal:.99, block:.99, react:.09, intercept:1.1, patience:.6};
@@ -3002,6 +3027,8 @@ function goTitle(){
 }
 function startGame(cpu){
   vsCPU = cpu; paused = false;
+  p2Skin = cpu || NET.role ? null : pickP2Skin();          // the sofa gets a second character, for the match
+  applyRankDifficulty();
   screenMode = 'play';
   syncUI();
   newMatch();
@@ -3052,8 +3079,10 @@ function newRound(keepScore){
     ballR: 15, ballColor:'#f07f22', ballGrav:1, maxThrow:0, rainbow:false, points:1,
     bounce: opener ? .68 : rnd(.6,.74), armLen: 38, wobble:.018, assist:1, drift:0,
     headScale:1, charScale:1, outfit:'kit', wind:0, slip:false,
-    mods: opener ? [] : rollMods(), wild: opener ? null : rollWild(), swell: false, deep: null, deepT: 0,
-    foeSkin: BOSS ? SKIN_BY_ID[BOSS.skin] : opener ? null : rollFoe()
+    mods: opener ? [] : rollMods(), wild: (opener || (!vsCPU && !NET.role)) ? null : rollWild(), swell: false, deep: null, deepT: 0,
+    foeSkin: BOSS ? SKIN_BY_ID[BOSS.skin]
+           : (!vsCPU && !NET.role) ? p2Skin                 // player two keeps the same character
+           : opener ? null : rollFoe()
   };
   if (!round.map) round.map = MAPS[0];                               // never leave the court undefined
   for (const m of round.mods) m.f(round);
@@ -3092,7 +3121,7 @@ function newRound(keepScore){
   if (!keepScore) matchWild = null;
   beast.on = 0; beast.rider = null; beast.hunt = null; surge.ph = 0; surge.t = 0;
   round.deep = null; round.deepT = 0;
-  for (const t of teams){ t.pitUsed = false; t.pitProg = 0; t.pitHold = 0; t.birdsLeft = 0; t.beastUsed = false; t.snatch = null; }
+  for (const t of teams){ t.pitUsed = false; t.pitProg = 0; t.pitHold = 0; t.pitAt = 0; t.birdsLeft = 0; t.beastUsed = false; t.snatch = null; }
   for (const c of chars){ c.bird = 0; c.seated = 0; c.washed = 0; }
   for (const t of teams){ t.watcherT = 0; t.watcherUsed = false; t.tkLeft = 0; }
   for (const c of chars) c.isWatcher = 0;
@@ -3621,7 +3650,7 @@ function useAbility(id){
       sfxBat();
       flash = mkFlash('BAT FORM', bloodMoon() ? 'THE SKY IS HIS TONIGHT' : 'OFF THE FLOOR', '#b06a86', 1.6);
       break;
-    case 'grasp': hadesPress(id); break;
+    case 'grasp': hadesGrasp(id); break;
     case 'bonerang': throwBone(id); break;
     case 'broadside': broadside(id); break;
     case 'erase': {
@@ -3640,10 +3669,21 @@ function useAbility(id){
       flash = mkFlash('CHALK LINE', 'GOOD LUCK PAST THAT', '#f2ecdc', 1.8);
       break;
     case 'jolt': {
-      const c = foes.reduce((a2, b2) => Math.hypot(a2.x - mine[0].x, a2.y - mine[0].y) < Math.hypot(b2.x - mine[0].x, b2.y - mine[0].y) ? a2 : b2);
-      c.stun = Math.max(c.stun, 1.5); c.charging = false; c.swing = 0;
-      c.zap = .5;
-      if (ball.holder === c){ ball.holder = null; ball.vx = rnd(-160, 160); ball.vy = -180; }
+      /* It goes for whoever is carrying. The old version picked whoever stood
+         nearest and set no grab cooldown, so the ball popped out and went
+         straight back into the same hands on the next frame. */
+      const carrier = ball.holder && ball.holder.team !== id ? ball.holder : null;
+      const c = carrier || foes.reduce((a2, b2) =>
+        Math.hypot(a2.x - mine[0].x, a2.y - mine[0].y) < Math.hypot(b2.x - mine[0].x, b2.y - mine[0].y) ? a2 : b2);
+      c.stun = Math.max(c.stun, 1.5); c.charging = false; c.swing = 0; c.shootQ = false;
+      c.zap = .6; c.tumble = Math.max(c.tumble, .45); c.av = rnd(-4, 4);
+      if (ball.holder === c){                                 // and it stays out of their hands
+        ball.holder = null; ball.shotBy = null;
+        ball.vx = teams[id].attack*rnd(90, 220); ball.vy = -rnd(240, 330);
+        c.grabCd = Math.max(c.grabCd, 1.4);
+        for (const f of foes) f.grabCd = Math.max(f.grabCd, .5);
+        flash = mkFlash('DROPPED IT', '', '#bff3ff', .9);
+      }
       shake = 7; sfxJolt();
       break;
     }
@@ -4400,6 +4440,7 @@ const TIERS = [
 const tierOf = id => TIERS[(SKIN_BY_ID[id] || {}).tier || 0];
 let matchWild = null;                                     // {id, team} once somebody has tagged it
 function rollWild(){
+  if (!NET.role && !vsCPU) return null;                     // nothing wild wanders into a sofa game
   const pool = WILD_IDS.filter(id => SAVE.testAll || !SAVE.owned.skin.includes(id));
   if (!pool.length) return null;
   const order = pool.slice();
@@ -5224,27 +5265,39 @@ const isHades = id => abKey(id) === 'grasp';
 function hadesPress(id){
   const t = teams[id];
   if (round.pit){ mountBird(id); return; }                 // already down there: get on one
-  if (t.pitUsed) { hadesGrasp(id); return; }               // spent: fall back on the hands
-  t.pitHold = .42;
+  if (!t.pitUsed){ t.pitHold = .3; return; }               // not yet: the key is the haul, and it is held
+  if (!abilityReady(id)) return;                           // spent: the hands, on a proper cooldown
+  const A = AB(id);
+  t.abT = A.dur; t.abCd = bossSide(id) ? Math.max(A.cd*BOSS.cd, BOSS_CD_FLOOR) : A.cd;
+  t.abName = A.n; t.abFlash = 1.1;
+  hadesGrasp(id); sfxPower('grasp'); paintPower();
 }
+const PIT_PULL = 300, PIT_GAIN = .5, PIT_LOSS = .5;      // hold it down and they come
+const pitWallX = t => t.attack > 0 ? W - 100 : 100;
 function tickPit(dt){
   for (const t of teams){
-    if (!isHades(t.id) || round.pit || t.pitUsed) continue;
-    if (t.pitHold > 0) t.pitHold -= dt;
+    if (!isHades(t.id) || round.pit || t.pitUsed){ t.pitAt = 0; continue; }
+    if (t.pitHold > 0) t.pitHold = Math.max(0, t.pitHold - dt);
+    const held = abHeld[t.id] || t.pitHold > 0;             // the key is held, or was a moment ago
     const botPush = t.cpu && ball.holder && ball.holder.team !== t.id;
-    if ((t.pitHold <= 0 && !botPush) || freeze > .02 || screenMode !== 'play'){
-      t.pitProg = Math.max(0, (t.pitProg || 0) - dt*.45); continue;
+    if ((!held && !botPush) || freeze > .02 || screenMode !== 'play'){
+      t.pitProg = Math.max(0, (t.pitProg || 0) - dt*.45); t.pitAt = 0; paintPower(); continue;
     }
-    const wall = t.attack > 0 ? W - 100 : 100;
+    const wall = pitWallX(t);
     const foes = chars.filter(c => c.team !== t.id);
-    let resist = 0;
+    if (!foes.length) continue;
+    let resist = 0, near = 0;
     for (const c of foes){
       const toWall = Math.sign(wall - c.x);
-      c.vx += toWall*220*dt*2.4; c.drag = 1;
+      c.vx += toWall*PIT_PULL*dt*2.4; c.drag = 1;           // you can see them being hauled
+      if (Math.abs(c.x - wall) < 130) near++;
       if (Math.sign(c.vx) === -toWall && Math.abs(c.vx) > 90) resist += .5;
     }
-    const atWall = foes.every(c => Math.abs(c.x - wall) < 120);
-    t.pitProg = clamp((t.pitProg || 0) + (.5*(atWall ? 1.8 : .6) - .64*resist)*dt, 0, 1);
+    const frac = near/foes.length;                          // partial credit, so it never just sits there
+    t.pitAt = frac;
+    const gain = PIT_GAIN*(.45 + frac*1.35);
+    t.pitProg = clamp((t.pitProg || 0) + (gain - PIT_LOSS*Math.min(1, resist))*dt, 0, 1);
+    paintPower();
     if (t.pitProg >= 1) enterPit(t.id);
   }
   if (round.pit) round.pitT += dt;
@@ -5273,7 +5326,7 @@ function enterPit(id){
   for (const c of chars){ c.drag = 0; c.tumble = Math.max(c.tumble, .5); }
   shake = 16; freeze = Math.max(freeze, .7);
   spriteCache.clear();
-  flash = mkFlash('THE ASHEN COURT', 'X / , TO CALL A BIRD', '#ff7a2e', 2.4);
+  flash = mkFlash('THE ASHEN COURT', 'S OR X TO CALL A BIRD', '#ff7a2e', 2.4);
   sfxPit();
 }
 function mountBird(id){
@@ -9414,7 +9467,8 @@ function draw(){
     const nm = (winner.id === 1 && vsCPU) ? DIFFS[diff].n : winner.name;
     text(nm+' WINS '+teams[0].score+'-'+teams[1].score, BW/2, 34, winner.color, 18);
     text('TAP TO PLAY AGAIN', BW/2, 50, '#e8e2d6', 9);
-    if (coinsWon > 0) text('+' + coinsWon + ' COINS', BW/2, 66, '#ffe234', 11);
+    if (coinsWon > 0) text('+' + coinsWon.toLocaleString() + ' COINS'
+        + (NET.role ? '  (x2 ONLINE)' : sofaGame() ? '  (2P CAP)' : ''), BW/2, 66, '#ffe234', 11);
   }
   ctx.restore();
 }
@@ -9833,38 +9887,38 @@ const SHOP = [
   {id:'classic', n:'ROOKIE', p:0, d:'No tricks, no cape, just ball.',
    st:{sht:58, jmp:58, def:58, spd:58}, cap:76, ab:'hustle'},
 
-  {id:'splash', n:'SPLASH', p:82300, lvl:2, d:'Deep-range sniper with a silly follow-through.',
+  {id:'splash', n:'SPLASH', p:82300, lvl:1, d:'Deep-range sniper with a silly follow-through.',
    kit:'#1d7a4f', alt:'#f2c53d', trimC:'#0d3f28', num:30, band:1, shoe:'#f2f2f5',
    style:'fade', hair:'#2b1a12', skin:'#7a4e30',
    st:{sht:84, jmp:52, def:44, spd:62}, cap:88, ab:'magic'},
 
-  {id:'fade', n:'FADEAWAY', p:82300, lvl:2, d:'Turnaround jumper, ice in the veins.',
+  {id:'fade', n:'FADEAWAY', p:82300, lvl:1, d:'Turnaround jumper, ice in the veins.',
    kit:'#5a2d8f', alt:'#f0c23a', trimC:'#2a1147', num:8, shoe:'#1f1c24',
    style:'fade', hair:'#14100e', skin:'#5c3a22',
    st:{sht:78, jmp:72, def:58, spd:62}, cap:88, ab:'fake'},
 
-  {id:'freight', n:'FREIGHT', p:82300, lvl:2, d:'Built like a truck, moves like one too.',
+  {id:'freight', n:'FREIGHT', p:82300, lvl:1, d:'Built like a truck, moves like one too.',
    kit:'#f2b327', alt:'#3a2d66', trimC:'#2a1f14', num:6, band:1, shoe:'#2a2030',
    style:'fade', hair:'#0f0c0a', skin:'#6b4326',
    st:{sht:52, jmp:60, def:86, spd:70}, cap:88, ab:'truck'},
 
-  {id:'zombie', n:'PATIENT ZERO', p:142800, lvl:4, d:'Fell over in 1974, still going.',
+  {id:'zombie', n:'PATIENT ZERO', p:142800, lvl:2, d:'Fell over in 1974, still going.',
    kit:'#4b5a3a', alt:'#39472c', skin:'#7fae5a', face:'zombie', pattern:'torn', shoe:'#3a3630',
    st:{sht:44, jmp:40, def:78, spd:44}, cap:80, ab:'turn'},
 
-  {id:'onion', n:'GARLIC MAN', p:117300, lvl:3, d:'Cloves. Tears. Dunks. Nothing that walks at night wants a word with him.',
+  {id:'onion', n:'GARLIC MAN', p:117300, lvl:2, d:'Cloves. Tears. Dunks. Nothing that walks at night wants a word with him.',
    kit:'#e8e2d0', alt:'#b9c48a', face:'garlic', shoe:'#6b4a2d',
    st:{sht:56, jmp:58, def:60, spd:62}, cap:82, ab:'peel'},
 
-  {id:'ninja', n:'SHADOW', p:302600, lvl:7, d:'You did not see the steal. Nobody did.',
+  {id:'ninja', n:'SHADOW', p:302600, lvl:3, d:'You did not see the steal. Nobody did.',
    kit:'#1c1c24', alt:'#8a1f2e', face:'ninja', sleeves:1, pants:1, shoe:'#1c1c24',
    st:{sht:62, jmp:76, def:66, spd:88}, cap:90, ab:'blink'},
 
-  {id:'pirate', n:'CAPTAIN SALT', p:259300, lvl:8, d:'Yarr. Two points.',
+  {id:'pirate', n:'CAPTAIN SALT', p:259300, lvl:4, d:'Yarr. Two points.',
    kit:'#2a2f3a', alt:'#f2f2f5', pattern:'stripes', face:'pirate', shoe:'#5a3a22',
    st:{sht:64, jmp:58, def:70, spd:62}, cap:84, ab:'hook'},
 
-  {id:'vampire', n:'NIGHT SHIFT', p:365500, lvl:11, d:'Only plays away games after dark. Brings his own weather.',
+  {id:'vampire', n:'NIGHT SHIFT', p:365500, lvl:4, d:'Only plays away games after dark. Brings his own weather.',
    kit:'#1b1420', alt:'#7a1020', skin:'#e6dce8', face:'vampire', cape:'#8c1220',
    sleeves:1, pants:1, shoe:'#2a2030',
    st:{sht:66, jmp:88, def:62, spd:68}, cap:92, ab:'bat'},
@@ -9874,7 +9928,7 @@ const SHOP = [
    shoe:'#c9a227', glow:'#ffe9a8',
    st:{sht:74, jmp:60, def:86, spd:62}, cap:98, ab:'worm'},
 
-  {id:'skeleton', n:'RATTLE', p:429300, lvl:13, d:'No muscles, no problem.',
+  {id:'skeleton', n:'RATTLE', p:429300, lvl:5, d:'No muscles, no problem.',
    kit:'#15131b', alt:'#e8e4d4', pattern:'bones', skin:'#e8e4d4', face:'skull',
    pants:1, sleeves:1, shoe:'#2a2830',
    st:{sht:56, jmp:74, def:64, spd:80}, cap:86, ab:'bonerang'},
@@ -9884,31 +9938,31 @@ const SHOP = [
    cape:'#e8453c', shoe:'#ffd23f', glow:'#8fd8ff',
    st:{sht:70, jmp:78, def:70, spd:74}, cap:92, ab:'bolt'},
 
-  {id:'robot', n:'UNIT-7', p:748000, lvl:19, d:'Beep. Dunk. Beep.',
+  {id:'robot', n:'UNIT-7', p:748000, lvl:6, d:'Beep. Dunk. Beep.',
    kit:'#6e7684', alt:'#49f0ff', skin:'#b8bfca', face:'visor', hat:'antenna',
    pants:1, sleeves:1, shoe:'#3a3f48', glow:'#49f0ff',
    st:{sht:88, jmp:58, def:68, spd:56}, cap:92, ab:'calc'},
 
-  {id:'astro', n:'COMMANDER ORB', p:692800, lvl:22, d:'Trained for low gravity. This is not that.',
+  {id:'astro', n:'COMMANDER ORB', p:692800, lvl:6, d:'Trained for low gravity. This is not that.',
    kit:'#eef1f5', alt:'#3b7be3', face:'helmet', pattern:'panel', sleeves:1, pants:1,
    pack:'#aeb6c2', shoe:'#c9ced8',
    st:{sht:64, jmp:90, def:60, spd:52}, cap:92, ab:'float'},
 
-  {id:'alien', n:'ZQX-9', p:833000, lvl:25, d:'Came a very long way for a pickup game.',
+  {id:'alien', n:'ZQX-9', p:833000, lvl:7, d:'Came a very long way for a pickup game.',
    kit:'#2b1f4a', alt:'#7cf96a', skin:'#7fd44a', face:'alien', hat:'stalks', cape:'#4b3c7d',
    glow:'#a6ff8a',
    st:{sht:74, jmp:76, def:74, spd:72}, cap:94, ab:'beam'},
 
-  {id:'knight', n:'SIR CLANG', p:952000, lvl:28, d:'Plate armour. Full send. Terrible idea.',
+  {id:'knight', n:'SIR CLANG', p:952000, lvl:8, d:'Plate armour. Full send. Terrible idea.',
    kit:'#9aa2b0', alt:'#6b7280', face:'knight', pattern:'plate', sleeves:1, pants:1, shoe:'#7c8290',
    st:{sht:62, jmp:40, def:94, spd:42}, cap:94, ab:'wall'},
 
-  {id:'golden', n:'MIDAS', p:1054000, lvl:33, d:'Pure showboat. Worth every coin.',
+  {id:'golden', n:'MIDAS', p:1054000, lvl:9, d:'Pure showboat. Worth every coin.',
    kit:'#f5c93b', alt:'#fff0a8', trimC:'#8a6a12', hat:'crown', shoe:'#f5c93b',
    cape:'#d8a01c', glow:'#fff3b0',
    st:{sht:80, jmp:80, def:80, spd:80}, cap:96, ab:'jackpot'},
 
-  {id:'zeus', n:'ZEUS', p:1173000, lvl:38, d:'Runs the weather. Takes it personally when you score.',
+  {id:'zeus', n:'ZEUS', p:1173000, lvl:10, d:'Runs the weather. Takes it personally when you score.',
    kit:'#f2f0e6', alt:'#f5c93b', trimC:'#c9a227', face:'zeus', hat:'laurel', pattern:'toga',
    shoe:'#c9a227', glow:'#fff6c8',
    st:{sht:76, jmp:72, def:78, spd:66}, cap:96, ab:'bolt2'},
@@ -9923,27 +9977,27 @@ const SHOP = [
    sleeves:1, pants:1, shoe:'#14060a', glow:'#ff5a3c',
    st:{sht:72, jmp:66, def:88, spd:64}, cap:96, ab:'grasp'},
 
-  {id:'portal', n:'PORTAL', p:197200, lvl:30, d:'Puts a hole in one bit of the court and another somewhere else.',
+  {id:'portal', n:'PORTAL', p:197200, lvl:9, d:'Puts a hole in one bit of the court and another somewhere else.',
    kit:'#2a2140', alt:'#b06cff', trimC:'#140f24', face:'portal', pattern:'rings',
    sleeves:1, pants:1, shoe:'#191233', glow:'#c79aff',
    st:{sht:74, jmp:64, def:60, spd:68}, cap:94, ab:'portal'},
 
-  {id:'mimic', n:'THE MIMIC', p:1343000, lvl:42, d:'Has no move of its own. Uses whatever the other side brought.',
+  {id:'mimic', n:'THE MIMIC', p:1343000, lvl:11, d:'Has no move of its own. Uses whatever the other side brought.',
    kit:'#5d5f6b', alt:'#c9ccd6', trimC:'#2e3038', face:'mimic', pattern:'static',
    sleeves:1, pants:1, shoe:'#3a3d46', glow:'#d8dbe4',
    st:{sht:70, jmp:70, def:70, spd:70}, cap:96, ab:'mimic'},
 
-  {id:'silk', n:'WEBSTER', p:901000, lvl:26, d:'Red and blue, up on the bars, line in hand.',
+  {id:'silk', n:'WEBSTER', p:901000, lvl:8, d:'Red and blue, up on the bars, line in hand.',
    kit:'#c1272d', alt:'#1f5fd0', trimC:'#8a1a20', face:'webster', pattern:'halves',
    sleeves:1, pants:1, shoe:'#1f5fd0', glow:'#ff8a8a',
    st:{sht:62, jmp:86, def:58, spd:86}, cap:94, ab:'web'},
 
-  {id:'timeout', n:'TIME OUT', p:850000, lvl:24, d:'Green, ticking, and never quite in the present.',
+  {id:'timeout', n:'TIME OUT', p:850000, lvl:7, d:'Green, ticking, and never quite in the present.',
    kit:'#1f9c5a', alt:'#8dffa0', trimC:'#0d3f28', face:'clockhead', pattern:'gears',
    sleeves:1, pants:1, shoe:'#0f3a24', glow:'#5bf0a0',
    st:{sht:66, jmp:64, def:62, spd:64}, cap:90, ab:'rewind'},
 
-  {id:'maw', n:'THE MAW', p:1258000, lvl:40, d:'Drags whoever it catches into the Hollow, and it is bigger down there.',
+  {id:'maw', n:'THE MAW', p:1258000, lvl:10, d:'Drags whoever it catches into the Hollow, and it is bigger down there.',
    kit:'#39303a', alt:'#7a2436', skin:'#6b5f6b', face:'maw', pattern:'sinew',
    sleeves:1, pants:1, shoe:'#221c22',
    st:{sht:56, jmp:72, def:92, spd:78}, cap:98, ab:'drag'},
@@ -10013,7 +10067,7 @@ const SHOP = [
    sleeves:1, pants:1, shoe:'#181b20', glow:'#bfc6d0',
    st:{sht:66, jmp:62, def:100, spd:66}, cap:100, ab:'lockdown'},
 
-  {id:'hacker', n:'HACKER', p:1368000, lvl:50, d:'Types the cheat in mid-game. Definitely not cheating.',
+  {id:'hacker', n:'HACKER', p:1368000, lvl:12, d:'Types the cheat in mid-game. Definitely not cheating.',
    kit:'#141418', alt:'#2a2a30', trimC:'#0a0a0d', face:'grin',
    sleeves:1, pants:1, shoe:'#0d0d10',
    st:{sht:70, jmp:62, def:66, spd:66}, cap:100, ab:'cheat'}
@@ -10045,7 +10099,7 @@ const ABILITIES = {
   jackpot: {n:'GOLDEN HOUR', cd:15, dur:6,   d:'Your next basket counts double and pays gold.'},
   bolt2:   {n:'THUNDERBOLT', cd:14, dur:0,   d:'A bolt for each of them, out of nothing. They go down, and they drop the ball.'},
   wave:    {n:'HIGH TIDE',   cd:14, dur:9,   d:'Brings the sea in over the court itself. Chest deep for nine seconds: the other side wade it and can barely leave the floor, he swims it, and the ball floats instead of bouncing away. With a swell already up it becomes the wave instead.'},
-  grasp:   {n:'UNDERWORLD',  cd:13, dur:0,   d:'Hands come up through the floor and hold the other side where they stand.'},
+  grasp:   {n:'UNDERWORLD',  cd:13, dur:0,   d:'Hold S (left) or \u2193 (right) and the floor drags the other side back towards your end. Get them to the wall and it opens: the rest of the match is played in the Ashen Court, where the same key calls a bird to carry you at the rim. Once a round \u2014 after that the key puts hands up through the floor instead, and they cannot move.'},
   portal:  {n:'PORTAL PAIR', cd:16, dur:0,   d:'Press once to start aiming, again to drop the orange hole, again for the blue one. Any ball that finds one comes out of the other. X (left) or , (right) cuts a way out of any world you have been dragged into.'},
   well:    {n:'SINGULARITY', cd:16, dur:0, d:'Tears a hole open beside your ring. Loose balls bend into the basket and the other side gets dragged in with them.'},
   echo:    {n:'AFTERIMAGE',  cd:16, dur:0, d:'Two phantoms of your players trail a moment behind you, blocking, shoving and steering the ball your way.'},
@@ -10059,7 +10113,7 @@ const ABILITIES = {
   buyout:  {n:'THE BUYOUT',  cd:16, dur:6.5, d:'Puts a number on one of theirs and it gets taken. For six and a half seconds that player wears your colours, runs on your keys and attacks their own ring. The ball comes loose in the paperwork, and when the contract runs out he walks back.'},
   magnet:  {n:'SCRAP MAGNET',cd:10, dur:3,   d:'A loose ball cannot help itself. It comes to you for three seconds.'},
   chalkline:{n:'CHALK LINE', cd:12, dur:6,   d:'Draws a line across the floor. The other side wades through anything past it.'},
-  jolt:    {n:'JOLT',        cd:9,  dur:0,   d:'A crack of static. Nearest opponent goes stiff and lets go of the ball.'},
+  jolt:    {n:'JOLT',        cd:9,  dur:0,   d:'A crack of static, straight at whoever is carrying. They go stiff, the ball comes out of their hands, and they cannot pick it back up for over a second.'},
   refract: {n:'REFRACTION',  cd:13, dur:5,   d:'Your next shot bends round whoever is in the way and leans in towards the ring. Nothing can block it.'},
   lamp:    {n:'PORCH LIGHT', cd:13, dur:4.5, d:'Hangs a light on the court. The other side cannot stop walking into it.'},
   ledger:  {n:'THE LEDGER',  cd:14, dur:8,   d:'Puts your next basket on account: it counts double, and if the shot misses the ball comes straight back to you.'},
@@ -10098,11 +10152,11 @@ function buyUpgrade(sk, k){
 const DANCE_SHOP = [{id:'none',    n:'NOTHING',        p:0,     d:'Stand there and take the applause.'},
   {id:'hop',     n:'HAPPY HOPS',     p:1200,  d:'Bounce about with your arms up. The humble option.'},
   {id:'flip',    n:'BACKFLIPS',      p:3000,  d:'Flip after flip after flip until someone stops you.'},
-  {id:'heli',    n:'EXTRACTION',     p:9000, lvl:6,  d:'A chopper drops a line, you climb on and it lifts you out over the crowd.'},
-  {id:'dragon',  n:'DRAGON RIDE',    p:22000, lvl:20, d:'A dragon lands on the court, you get on, and it burns the place down on the way out.'},
-  {id:'ufo',     n:'ABDUCTION',      p:16000, lvl:12, d:'A saucer comes down, takes you up the beam, and leaves.'},
+  {id:'heli',    n:'EXTRACTION',     p:9000, lvl:3,  d:'A chopper drops a line, you climb on and it lifts you out over the crowd.'},
+  {id:'dragon',  n:'DRAGON RIDE',    p:22000, lvl:8, d:'A dragon lands on the court, you get on, and it burns the place down on the way out.'},
+  {id:'ufo',     n:'ABDUCTION',      p:16000, lvl:5, d:'A saucer comes down, takes you up the beam, and leaves.'},
   {id:'rocket',  n:'MOONSHOT',       p:13000, d:'Strap in and go straight up through the roof.'},
-  {id:'quake',   n:'GROUND BREAK',   p:18000, lvl:15, d:'Stamp once and split the floor in half.'}
+  {id:'quake',   n:'GROUND BREAK',   p:18000, lvl:6, d:'Stamp once and split the floor in half.'}
 ];
 const SOUND_SHOP = [
   {id:'classic', n:'BRASS FANFARE', p:0,   d:'Horns, cymbals and a crowd'},
@@ -10118,13 +10172,58 @@ const CATS = [{k:'board', n:'RANKS', list:() => []}, {k:'skin', n:'SKINS', list:
 const CAT_BY_K = {}; for (const c of CATS) CAT_BY_K[c.k] = c;
 const ITEM_CATS = CATS.filter(c => c.k !== 'board' && c.k !== 'profile' && c.k !== 'set');
 const SAVE_KEY = 'hoopchaos';                 // never rename this: it is what carries progress between releases
-const SAVE = {v: 3, name: '', pw: '', coins: 0, xp: 0, wins: 0, played: 0, testAll: false, bought: [], bosses: [], wilds: [], music: 'breeze', lastMusic: 'breeze', up: {},
+const SAVE = {v: 5, name: '', pw: '', coins: 0, xp: 0, wins: 0, played: 0, testAll: false, bought: [], lent: null, bosses: [], wilds: [], music: 'breeze', lastMusic: 'breeze', up: {},
   owned: {skin: ['classic'], dance: ['none'], sound: ['classic'], wall: ['random']},
   equip: {skin: 'classic', dance: 'none', sound: 'classic', wall: 'random'}};
 const itemIn = (cat, id) => CAT_BY_K[cat].list().find(x => x.id === id);
+const BAK_KEY = 'hoopchaos_bak';              // a second copy: a half-written save must not cost the account
+const SAVE_VERSION = 5;
+const PRE_KEY = 'hoopchaos_preupdate';        // and one more, frozen the first time a new release opens an old save
+let cameFrom = SAVE_VERSION;                  // which release this save was last written by
+function snapshotOnce(raw){
+  try {
+    if (!raw || typeof raw !== 'object' || typeof raw.coins !== 'number') return;
+    if ((raw.v | 0) >= SAVE_VERSION) return;                // already on this release, nothing to freeze
+    if (localStorage.getItem(PRE_KEY)) return;              // and only ever the first time
+    localStorage.setItem(PRE_KEY, JSON.stringify(raw));
+  } catch (e){}
+}
+const hasPreUpdate = () => { try { return !!localStorage.getItem(PRE_KEY); } catch (e){ return false; } };
+/* An older copy of the game left open in another tab still pays the old rates and
+   writes to the same storage. So this release keeps its own sealed record of what
+   it last paid out. If a save turns up that an older build wrote AFTER this one had
+   already run here, the figures in it are not earnings \u2014 they are the old economy,
+   and they get rolled back to the seal. The first upgrade has no seal yet, so a
+   genuine old account comes across whole. */
+const SEAL_KEY = 'hoopchaos_seal';
+let staleBuild = false;
+function sealSave(){
+  try { localStorage.setItem(SEAL_KEY, JSON.stringify({
+    v: SAVE_VERSION, coins: SAVE.coins | 0, xp: SAVE.xp | 0,
+    wins: SAVE.wins | 0, played: SAVE.played | 0, at: Date.now()})); } catch (e){}
+}
+function readSeal(){
+  try { const o = JSON.parse(localStorage.getItem(SEAL_KEY) || 'null');
+        return (o && (o.v | 0) >= SAVE_VERSION) ? o : null; } catch (e){ return null; }
+}
+function readSaveRaw(){
+  let main = null, bak = null;
+  try { main = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); } catch (e){}
+  try { bak  = JSON.parse(localStorage.getItem(BAK_KEY)  || 'null'); } catch (e){}
+  const ok = o => o && typeof o === 'object' && (typeof o.coins === 'number' || o.owned);
+  if (!ok(main) && ok(bak)) return bak;                     // the main one is gone or unreadable
+  if (ok(main) && ok(bak)){                                 // both there: take whichever got further
+    const w = o => (o.coins|0) + (o.xp|0)*4 + (o.bought ? o.bought.length : 0)*5000;
+    if (w(bak) > w(main)) return bak;
+  }
+  return main || {};
+}
+function backupSave(){ try { localStorage.setItem(BAK_KEY, JSON.stringify(SAVE)); } catch (e){} }
 function loadSave(){
   try {
-    const j = JSON.parse(localStorage.getItem('hoopchaos') || '{}');
+    const j = readSaveRaw();
+    snapshotOnce(j);
+    if (typeof j.v === 'number') cameFrom = j.v | 0;
     if (typeof j.coins === 'number') SAVE.coins = Math.max(0, j.coins|0);
     if (typeof j.name === 'string') SAVE.name = j.name.slice(0, 14);
     if (typeof j.pw === 'string') SAVE.pw = j.pw;
@@ -10142,19 +10241,34 @@ function loadSave(){
       if (typeof j.played === 'number') SAVE.played = Math.max(0, j.played|0);
       SAVE.testAll = j.testAll === true;                 // off unless it was deliberately switched on
       if (Array.isArray(j.bought)) SAVE.bought = j.bought;
+      SAVE.lent = Array.isArray(j.lent) ? j.lent : (j.v >= 4 ? [] : null);   // null means: never audited, keep the lot
 
       for (const c of ITEM_CATS){
-        const have = Array.isArray(j.owned[c.k]) ? j.owned[c.k].filter(id => itemIn(c.k, id)) : [];
+        const have = Array.isArray(j.owned[c.k]) ? j.owned[c.k].filter(id => typeof id === 'string') : [];
         SAVE.owned[c.k] = Array.from(new Set(SAVE.owned[c.k].concat(have)));
         const eq = j.equip && j.equip[c.k];
         if (eq && SAVE.owned[c.k].includes(eq)) SAVE.equip[c.k] = eq;
       }
     }
+    const seal = readSeal();
+    if (seal && (j.v | 0) < SAVE_VERSION){                      // an older build has been paying itself
+      staleBuild = SAVE.coins > seal.coins || SAVE.xp > seal.xp;
+      SAVE.coins = Math.min(SAVE.coins, seal.coins | 0);
+      SAVE.xp    = Math.min(SAVE.xp,    seal.xp    | 0);
+      SAVE.wins  = Math.min(SAVE.wins,  seal.wins  | 0);
+    }
   } catch (e){ /* first run, or storage blocked */ }
 }
 let saveBroken = false;
+let bakAt = 0;
 function saveGame(){
-  try { localStorage.setItem(SAVE_KEY, JSON.stringify(SAVE)); saveBroken = false; }
+  try {
+    const blob = JSON.stringify(SAVE);
+    localStorage.setItem(SAVE_KEY, blob);
+    if (Date.now() - bakAt > 4000){ bakAt = Date.now(); localStorage.setItem(BAK_KEY, blob); }
+    sealSave();
+    saveBroken = false;
+  }
   catch (e){ saveBroken = true; }              // private window, or the disk is full
 }
 /* a backup code: everything you own, as text you can paste on another device */
@@ -10168,62 +10282,114 @@ function loadCode(code){
     if (!/^HC1-/.test(raw)) return 'That code does not look right.';
     const j = JSON.parse(decodeURIComponent(escape(atob(raw.slice(4)))));
     if (!j || typeof j !== 'object' || typeof j.coins !== 'number') return 'That code is damaged.';
-    localStorage.setItem(SAVE_KEY, JSON.stringify(j));
-    for (const c of CATS) if (c.k !== 'profile'){ SAVE.owned[c.k] = [SAVE.owned[c.k][0]]; }
-    SAVE.coins = 0; SAVE.name = '';
-    loadSave(); spriteCache.clear(); paintCoins();
+    j.v = SAVE_VERSION;                                         // you pasted this in on purpose: it is this
+    localStorage.setItem(SAVE_KEY, JSON.stringify(j));          // release's account from here on
+    try { localStorage.removeItem(SEAL_KEY); } catch (e){}      // and the old device's ceiling does not apply
+    for (const c of ITEM_CATS){                             // back to bare, then take everything off the code
+      SAVE.owned[c.k] = [SAVE.owned[c.k][0]];
+      SAVE.equip[c.k] = SAVE.owned[c.k][0];
+    }
+    SAVE.coins = 0; SAVE.xp = 0; SAVE.wins = 0; SAVE.played = 0;
+    SAVE.name = ''; SAVE.pw = ''; SAVE.bosses = []; SAVE.wilds = []; SAVE.bought = []; SAVE.lent = null; SAVE.up = {};
+    staleBuild = false;
+    loadSave(); staleBuild = false;                             // a code you pasted in yourself is the truth
+    SAVE.v = SAVE_VERSION; backupSave(); sealSave();
+    spriteCache.clear(); paintCoins(); syncUI();
     if (round) round.map = wallMap() || round.map;
     return '';
   } catch (e){ return 'That code could not be read.'; }
 }
 loadSave();
 // a switch in the profile tab: everything open for a look, or earn it properly
+/* Try-all lends you the whole shop. It has to hand back exactly what it lent and
+   nothing else \u2014 the old version swept out anything missing from the receipts,
+   which quietly ate every dance, sound and wallpaper you had ever paid for. */
 function applyTestUnlock(){
   if (!SAVE.testAll) return;
+  SAVE.lent = Array.isArray(SAVE.lent) ? SAVE.lent : [];
   for (const c of ITEM_CATS)                                 // everything, including the wilds and the back room
-    for (const it of c.list()) if (!SAVE.owned[c.k].includes(it.id)) SAVE.owned[c.k].push(it.id);
+    for (const it of c.list()) if (!SAVE.owned[c.k].includes(it.id)){
+      SAVE.owned[c.k].push(it.id);
+      const tag = c.k + ':' + it.id;
+      if (!SAVE.lent.includes(tag)) SAVE.lent.push(tag);      // noted, so it can be handed back
+    }
 }
-function dropTestUnlock(){                                   // back to what you actually earned
-  const kept = SAVE.bought || [];
+function dropTestUnlock(){
+  const lent = SAVE.lent;
   for (const c of ITEM_CATS){
     const first = SAVE.owned[c.k][0];
-    SAVE.owned[c.k] = SAVE.owned[c.k].filter(id => id === first || kept.includes(id));
+    if (Array.isArray(lent)){                                 // we know what was lent: take back only that
+      SAVE.owned[c.k] = SAVE.owned[c.k].filter(id => id === first || !lent.includes(c.k + ':' + id));
+    } else {                                                  // an old save with no record: fall back on receipts
+      const kept = SAVE.bought || [];
+      SAVE.owned[c.k] = SAVE.owned[c.k].filter(id => id === first || kept.includes(id));
+    }
     if (!SAVE.owned[c.k].includes(SAVE.equip[c.k])) equipItem(c.k, first);
   }
+  SAVE.lent = [];
+  saveGame();
 }
 if (SAVE.testAll === undefined) SAVE.testAll = false;     // everything is bought, unless you say otherwise
-if (!SAVE.testAll) dropTestUnlock();                     // an older save that was given the lot hands it back
+if (!SAVE.testAll && Array.isArray(SAVE.lent) && SAVE.lent.length) dropTestUnlock();   // only ever the loan
 applyTestUnlock();
+/* An account made before the rank rebuild keeps every coin, character and boss it
+   had; only the number next to the rank is worked out differently. Say so once. */
+const rebuiltRanks = !!SAVE.name && cameFrom < 5 && !staleBuild;
+const rolledBack = staleBuild;
+SAVE.v = SAVE_VERSION;
+if (SAVE.name) saveGame();
 addEventListener('beforeunload', saveGame);    // belt and braces: never lose a match's coins
 document.addEventListener('visibilitychange', () => { if (document.hidden) saveGame(); });
 const mySide = () => NET.role === 'guest' ? 1 : 0;
 /* ============================ RANK AND XP ============================
    Every match pays experience. Levels unlock things in the shop. */
-const RANKS = [
-  {at:0,  n:'ROOKIE',     c:'#9aa0ad'}, {at:5,  n:'BENCHWARMER', c:'#8dffa0'},
-  {at:10, n:'STARTER',    c:'#6ee7ff'}, {at:16, n:'SIXTH MAN',   c:'#49b0ff'},
-  {at:23, n:'ALL-STAR',   c:'#b06cff'}, {at:31, n:'FRANCHISE',   c:'#ff8ad8'},
-  {at:40, n:'HALL OF FAME', c:'#f5c93b'}, {at:52, n:'IMMORTAL',  c:'#ff5a3c'}
+/* Four tiers, three rungs apiece: COAL I through DIAMOND III, and that is the
+   whole ladder. The tier you are on decides how good the bots you face are. */
+const RANK_TIERS = [
+  {n:'COAL',    c:'#8a8f98', dim:'#4a4e56'},
+  {n:'SILVER',  c:'#cfd6e2', dim:'#767f8d'},
+  {n:'GOLD',    c:'#f5c93b', dim:'#8a6a12'},
+  {n:'DIAMOND', c:'#7fe8ff', dim:'#2f7f9e'}
 ];
-const xpFor = lvl => Math.round(420*Math.pow(lvl, 1.42));      // total needed to reach that level
-function levelFromXp(xp){ let l = 1; while (l < 99 && xp >= xpFor(l + 1)) l++; return l; }
-const rankOf = lvl => RANKS.reduce((a, r) => lvl >= r.at ? r : a, RANKS[0]);
+const STEPS = ['I', 'II', 'III'];
+/* Twelve graded rungs, then one more that is not graded at all: ULTRA G is the
+   end of the road and has no I, II or III under it. */
+const ULTRA = {n:'ULTRA G', c:'#ff5ad8', dim:'#8a1f6a'};
+const TIER_LEVELS = RANK_TIERS.length*STEPS.length;            // twelve
+const MAX_LEVEL = TIER_LEVELS + 1;                             // and ULTRA G on top
+const isUltra = lvl => lvl >= MAX_LEVEL;
+const rankTier = lvl => clamp(Math.floor((lvl - 1)/STEPS.length), 0, RANK_TIERS.length - 1);
+const rankStep = lvl => clamp((lvl - 1) % STEPS.length, 0, STEPS.length - 1);
+const xpFor = lvl => lvl <= 1 ? 0 : Math.round(900*Math.pow(lvl - 1, 1.75));
+function levelFromXp(xp){ let l = 1; while (l < MAX_LEVEL && xp >= xpFor(l + 1)) l++; return l; }
+function rankOf(lvl){
+  if (isUltra(lvl)) return {n: ULTRA.n, c: ULTRA.c, dim: ULTRA.dim, tier: RANK_TIERS.length, tn: ULTRA.n, ultra: true};
+  const t = RANK_TIERS[rankTier(lvl)];
+  return {n: t.n + ' ' + STEPS[rankStep(lvl)], c: t.c, dim: t.dim, tier: rankTier(lvl), tn: t.n, ultra: false};
+}
 const myLevel = () => levelFromXp(SAVE.xp || 0);
 function xpProgress(){
   const l = myLevel(), lo = xpFor(l), hi = xpFor(l + 1);
+  if (l >= MAX_LEVEL) return {l, lo, hi: lo, into: 0, need: 0, frac: 1};
   return {l, lo, hi, into: (SAVE.xp || 0) - lo, need: hi - lo, frac: clamp(((SAVE.xp || 0) - lo)/(hi - lo), 0, 1)};
 }
 function awardXp(winId){
+  if (sofaGame()){ xpWon = 0; return; }                         // the sofa does not count towards rank
   const mine = mySide(), before = myLevel();
-  const gain = 90 + teams[mine].score*45 + (winId === mine ? 260 : 0)
-             + (winId === mine ? Math.max(0, WIN_SCORE - teams[1 - mine].score)*35 : 0);
+  let gain = 90 + teams[mine].score*45 + (winId === mine ? 260 : 0)
+           + (winId === mine ? Math.max(0, WIN_SCORE - teams[1 - mine].score)*35 : 0);
+  if (NET.role) gain *= 2;                                      // online counts double
+  gain = Math.round(gain);
   SAVE.xp = (SAVE.xp || 0) + gain;
   xpWon = gain;
   const after = myLevel();
   if (after > before){
     levelledTo = after;
-    const r = rankOf(after);
-    setTimeout(() => { flash = mkFlash('LEVEL ' + after, r.n, r.c, 3); }, 1400);
+    const r = rankOf(after), up = rankTier(after) > rankTier(before) || isUltra(after);
+    setTimeout(() => {
+      flash = isUltra(after) ? mkFlash('ULTRA G', 'THERE IS NOTHING ABOVE THIS', ULTRA.c, 4.2)
+            : mkFlash(up ? r.tn : r.n, up ? 'YOU ARE ' + r.n : 'LEVEL ' + after + ' OF ' + MAX_LEVEL, r.c, up ? 3.6 : 3);
+    }, 1400);
   }
   saveGame();
 }
@@ -10335,20 +10501,33 @@ function skinFor(team){
   const sk = SKIN_BY_ID[id];
   return sk && sk.id !== 'classic' ? sk : null;
 }
+let p2Skin = null;                                        // who player two is, for this whole match
+function pickP2Skin(){
+  const own = SHOP.filter(sk => !sk.boss && !sk.wild && SAVE.owned.skin.includes(sk.id) && sk.id !== SAVE.equip.skin);
+  if (own.length) return pick(own);
+  const any = SHOP.filter(sk => !sk.boss && !sk.wild && SAVE.owned.skin.includes(sk.id));
+  return any.length ? pick(any) : null;
+}
 const rollFoe = () => pick(SHOP.filter(sk => !sk.wild && !sk.boss && sk.id !== 'classic' && sk.id !== SAVE.equip.skin));
 let coinsWon = 0;
-const WIN_PURSE = 5000, SHUTOUT_STEP = 2000;                    // and 2000 for every goal you kept them off
-const modePay = () => NET.role ? 1.4 : vsCPU ? 1 : .82;         // online pays best, the sofa pays least
+const WIN_PURSE = 4000, SHUTOUT_STEP = 1600;                    // a 5-0 is 12,000 before rank
+const SOFA_CAP = 1000;                                          // two on one keyboard cannot be a coin mine
+/* Climbing pays: COAL I takes the flat rate, DIAMOND III takes two thirds more. */
+const rankPay = () => 1 + (clamp(myLevel(), 1, MAX_LEVEL) - 1)*(.667/(MAX_LEVEL - 1));
+const sofaGame = () => !NET.role && !vsCPU;                     // both players on this keyboard
 function rewardFor(winId){
   const mine = mySide(), theirs = teams[1 - mine].score;
-  const m = modePay();
-  if (winId !== mine) return Math.round(teams[mine].score*120*m);
-  return Math.round((WIN_PURSE + SHUTOUT_STEP*Math.max(0, WIN_SCORE - theirs))*m);
+  let pay = winId !== mine ? teams[mine].score*110
+          : WIN_PURSE + SHUTOUT_STEP*Math.max(0, WIN_SCORE - theirs);
+  pay *= rankPay();
+  if (NET.role) pay *= 2;                                       // a real opponent is worth double
+  else if (sofaGame()) return Math.min(SOFA_CAP, Math.round(pay*.2));
+  return Math.round(pay);
 }
 function awardCoins(winId){
   SAVE.played = (SAVE.played || 0) + 1;
   if (winId === mySide()) SAVE.wins = (SAVE.wins || 0) + 1;
-  awardXp(winId); claimWild(winId);
+  awardXp(winId); if (!sofaGame()) claimWild(winId);
   coinsWon = rewardFor(winId);
   SAVE.coins += coinsWon; saveGame(); paintCoins(); cloudPush();
 }
@@ -10400,17 +10579,21 @@ let boardMode = 'rank';
 function paintBoard(grid){
   grid.className = 'board';
   const me = xpProgress(), r = rankOf(me.l);
+  grid.style.setProperty('--rank', r.c);
 
   const head = document.createElement('div'); head.className = 'bhead';
   const lv = document.createElement('div'); lv.className = 'blv';
-  lv.innerHTML = '<b style="color:' + r.c + '">' + r.n + '</b><span>LEVEL ' + me.l + '</span>';
+  lv.innerHTML = '<b style="color:' + r.c + '">' + r.n + '</b><span>'
+    + (r.ultra ? 'THE LAST RANK' : 'LEVEL ' + me.l + ' OF ' + MAX_LEVEL) + '</span>';
   head.appendChild(lv);
   const bar = document.createElement('div'); bar.className = 'bbar';
   const fill = document.createElement('i'); fill.style.width = (me.frac*100).toFixed(1) + '%';
   fill.style.background = r.c; bar.appendChild(fill);
   head.appendChild(bar);
   const xt = document.createElement('div'); xt.className = 'bxp';
-  xt.textContent = me.into.toLocaleString() + ' / ' + me.need.toLocaleString() + ' XP TO LEVEL ' + (me.l + 1);
+  xt.textContent = me.l >= MAX_LEVEL
+    ? 'ULTRA G · NOTHING ABOVE THIS · ' + (SAVE.xp || 0).toLocaleString() + ' XP'
+    : me.into.toLocaleString() + ' / ' + me.need.toLocaleString() + ' XP TO ' + rankOf(me.l + 1).n;
   head.appendChild(xt);
   const rec = document.createElement('div'); rec.className = 'bxp';
   const pl2 = SAVE.played || 0, wn = SAVE.wins || 0;
@@ -10454,7 +10637,7 @@ function paintBoard(grid){
   const val = row => boardMode === 'wealth' ? row.w.toLocaleString() + 'g'
     : boardMode === 'wins' ? row.won + ' W · ' + row.pl + ' PL · ' +
         (row.pl ? Math.round(row.won/row.pl*100) : 0) + '%'
-    : 'LVL ' + levelFromXp(row.xp) + ' · ' + row.xp.toLocaleString() + ' XP';
+    : rankOf(levelFromXp(row.xp)).n + ' · ' + row.xp.toLocaleString() + ' XP';
 
   const pod = document.createElement('div'); pod.className = 'podium';
   const ORDER = [3, 1, 0, 2, 4];                       // fourth, second, WINNER, third, fifth
@@ -10594,7 +10777,8 @@ function paintShop(){
         if (lockedFor(it)){ shopMsg('That one opens up at level ' + it.lvl + '. You are ' + myLevel() + '.', true); return; }
         if (SAVE.coins < it.p){ shopMsg('You need ' + (it.p - SAVE.coins) + ' more coins. Win a match to earn some.', true); return; }
         SAVE.coins -= it.p; SAVE.owned[shopCat].push(it.id);
-        if (shopCat === 'skin'){ SAVE.bought = SAVE.bought || []; SAVE.bought.push(it.id); }
+        SAVE.bought = SAVE.bought || [];
+        if (!SAVE.bought.includes(it.id)) SAVE.bought.push(it.id);   // dances and the rest count too
         shopMsg('Bought ' + it.n + '!');
       } else shopMsg('Now using ' + it.n + '.');
       equipItem(shopCat, it.id);
@@ -10846,7 +11030,8 @@ function openCloseUp(id){
       if (lockedFor(it)){ shopMsg('That one opens up at level ' + it.lvl + '. You are ' + myLevel() + '.', true); return; }
       if (SAVE.coins < it.p){ shopMsg('You need ' + (it.p - SAVE.coins).toLocaleString() + ' more coins.', true); return; }
       SAVE.coins -= it.p; SAVE.owned.skin.push(it.id);
-      SAVE.bought = SAVE.bought || []; SAVE.bought.push(it.id);
+      SAVE.bought = SAVE.bought || [];
+      if (!SAVE.bought.includes(it.id)) SAVE.bought.push(it.id);
       shopMsg('Bought ' + it.n + '!');
     } else shopMsg('Now using ' + it.n + '.');
     equipItem('skin', it.id);
@@ -10966,10 +11151,32 @@ function paintProfile(grid){
     else { shopMsg('Restored! You have ' + SAVE.coins + ' coins.'); paintShop(); }
   };
   r2.appendChild(load);
+  if (hasPreUpdate()){                                      // the frozen copy from before this release
+    add('div', 'lab', 'BEFORE THIS UPDATE');
+    const pre = (() => { try { return JSON.parse(localStorage.getItem(PRE_KEY)); } catch (e){ return null; } })();
+    add('div', 'ds', pre
+      ? 'A copy of your account was frozen the first time this version opened it: '
+        + (pre.coins || 0).toLocaleString() + ' coins. Nothing was taken away, but it is there if you want it back.'
+      : 'A copy of your account from before this version is stored here.');
+    const rb = add('div', 'row');
+    const back = document.createElement('button'); back.textContent = 'RESTORE THAT COPY';
+    back.onclick = () => {
+      if (back.textContent !== 'SURE?'){ back.textContent = 'SURE?';
+        setTimeout(() => { back.textContent = 'RESTORE THAT COPY'; }, 3000); return; }
+      try {
+        const raw = localStorage.getItem(PRE_KEY);
+        if (!raw) return shopMsg('That copy is gone.', true);
+        localStorage.setItem(SAVE_KEY, raw); localStorage.setItem(BAK_KEY, raw);
+        location.reload();
+      } catch (e){ shopMsg('Could not read that copy.', true); }
+    };
+    rb.appendChild(back);
+  }
   const wipe = document.createElement('button'); wipe.textContent = 'START OVER';
   wipe.onclick = () => {
     if (wipe.textContent !== 'SURE?'){ wipe.textContent = 'SURE?'; setTimeout(() => { wipe.textContent = 'START OVER'; }, 3000); return; }
-    try { localStorage.removeItem(SAVE_KEY); } catch (e){}
+    try { localStorage.removeItem(SAVE_KEY); localStorage.removeItem(BAK_KEY);
+          localStorage.removeItem(SEAL_KEY); } catch (e){}
     SAVE.coins = 0; SAVE.name = '';
     SAVE.bosses = [];
     for (const c of ITEM_CATS){ SAVE.owned[c.k] = [SAVE.owned[c.k][0]]; SAVE.equip[c.k] = SAVE.owned[c.k][0]; }
@@ -11154,6 +11361,16 @@ function paintPower(){
       el.classList.add('live'); el.classList.remove('cool');
       if (bar.style) bar.style.transform = 'scaleX(1)';
       continue;
+    }
+    if (abKey(id) === 'grasp' && !(round && round.pit)){    // Hades shows the haul before the hands
+      const spent = t.pitUsed;
+      nm.textContent = spent ? A.n : (t.pitProg > 0 ? (t.pitAt >= 1 ? 'AT THE WALL' : 'HAULING')
+                                 : (id === 0 ? 'HOLD S' : 'HOLD \u2193'));
+      if (!spent){
+        frac = t.pitProg || 0;
+        el.classList.toggle('live', frac > 0);
+        el.classList.toggle('cool', false);
+      }
     }
     if (abKey(id) === 'turn'){                  // Patient Zero shows the haul, then the hold
       nm.textContent = t.turned > 0 ? 'TURNED ' + t.turned.toFixed(0) : t.turnUsed ? 'SPENT' : 'TAP S';
@@ -11512,9 +11729,35 @@ function openFirstRun(mode){
   go.textContent = signIn ? 'SIGN IN' : 'CREATE ACCOUNT';
   sub.textContent = signIn
     ? 'Welcome back, ' + SAVE.name.toUpperCase() + '. Put your password in to pick up where you left off.'
+      + (rolledBack ? '  Heads up: an older copy of the game has been writing to this browser. '
+         + 'Coins and XP it handed out do not count, so your balance is back to the '
+         + SAVE.coins.toLocaleString() + ' this version last recorded. Close any old tabs and refresh.'
+         : rebuiltRanks ? '  This update rebuilt the ranks \u2014 your ' + SAVE.coins.toLocaleString()
+         + ' coins and everything you own came across untouched, only the rank badge is worked out differently.' : '')
     : 'Make an account. The name goes on the leaderboard and is what the other side sees online. The password is what stops anyone else playing as you.';
   other.style.display = signIn ? '' : 'none';
   other.textContent = 'Not you? Start a different account';
+
+  const hasCode = document.getElementById('frHasCode');     // bringing an account over from another copy
+  const codeBox = document.getElementById('frCodeBox');
+  const codeTa = document.getElementById('frCode'), codeGo = document.getElementById('frCodeGo');
+  codeBox.style.display = 'none';
+  const showCode = v => { codeBox.style.display = v ? 'flex' : 'none'; };
+  hasCode.style.display = '';                              // useful either way
+  hasCode.textContent = signIn ? 'Bringing an account over? Paste your backup code'
+                               : 'Moving from another copy? Paste your backup code';
+  hasCode.onclick = () => {
+    const open = codeBox.style.display === 'none';
+    showCode(open);
+    if (open) setTimeout(() => { try { codeTa.focus(); } catch (e){} }, 50);
+  };
+  codeGo.onclick = () => {
+    const err = loadCode(codeTa.value);
+    if (err){ msg.textContent = err; return; }
+    msg.textContent = 'Restored. Signing you back in\u2026';
+    saveGame();
+    setTimeout(() => location.reload(), 500);
+  };
   setTimeout(() => { try { (signIn ? passIn : nameIn).focus(); } catch (e){} }, 60);
 
   const done = async () => {
@@ -11549,7 +11792,8 @@ function openFirstRun(mode){
       setTimeout(() => { other.textContent = 'Not you? Start a different account'; }, 4000);
       return;
     }
-    try { localStorage.removeItem(SAVE_KEY); } catch (e){}
+    try { localStorage.removeItem(SAVE_KEY); localStorage.removeItem(BAK_KEY);
+          localStorage.removeItem(SEAL_KEY); } catch (e){}
     location.reload();
   };
 }
