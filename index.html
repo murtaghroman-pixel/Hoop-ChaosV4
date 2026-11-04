@@ -5454,9 +5454,9 @@ const POTION_COST = {
 const potionCost = ab => POTION_COST[ab] || POTION_PRICE*2;
 /* every move a character can lend, once: the ones the roster makes, plus the jaguar's own two */
 const POTION_EXTRA = ['sunseal', 'pounce'];
-function allPotions(){
-  const set = new Set(POTION_EXTRA);
-  for (const sk of SHOP){ const ab = potionOf(sk.id); if (ab) set.add(ab); }
+function allPotions(){   /*potv6*/
+  const set = new Set(V7_ON ? POTION_EXTRA : []);                   // the El Dorado potions wait for V7 along with the road to it
+  for (const sk of SHOP){ if (!V7_ON && eldOnly(sk)) continue; const ab = potionOf(sk.id); if (ab) set.add(ab); }
   return [...set].sort((a, b) => potionCost(a) - potionCost(b) || potionName(a).localeCompare(potionName(b)));
 }
 const potionMakers = ab => SHOP.filter(sk => potionOf(sk.id) === ab || (ab === 'sunseal' && sk.id === 'jaguar') || (ab === 'pounce' && sk.id === 'jaguar')).map(sk => sk.n);
