@@ -608,6 +608,7 @@
         <div class="mrow prime">
           <button id="p1Btn" class="big">1 PLAYER</button>
           <button id="p2Btn" class="big">2 PLAYER</button>
+          <button id="soccerBtn" class="big">ITS CALLED SOCCER</button>
         </div>
         <div class="mrow second">
           <button id="onl">MULTIPLAYER</button>
@@ -3580,8 +3581,16 @@ const SWING_T = .23;              // how long the arm takes to come over
 const MIN_SHOT = .25;             // below this the press was just a hop, keep the ball
 const CALLS = ['BASKET!','SWISH','CLEAN'];
 let slow = 0, scoreLock = false, screenMode = 'title';
+/* ===================== ITS CALLED SOCCER =====================
+   Football mode. The hoops come down and a goal goes up at each end. Nobody
+   can pick the ball up: you kick it by running into it, and it goes toward
+   the goal you attack. Get it under the bar and past the line to score. */
+let SOCCER = false;
+const GOAL_X = 84, GOAL_H = 118, GOAL_D = 54;   // goal line in from the edge, bar height, net depth
+const goalLine = side => side < 0 ? GOAL_X : W - GOAL_X;
 function goTitle(){
   LVL = null;
+  SOCCER = false;
   if (TOUR.live && TOUR.on) cupForfeit();       // out of a cup match to the menu: that is the tie lost
   TOUR.live = 0;                                // off the floor; the draw itself is still standing
   SEASON.live = 0;
@@ -3672,7 +3681,9 @@ function newRound(keepScore){
            : rollFoe()                              // the first one is drawn too, same as the rest
   };
   if (!round.map) round.map = MAPS[0];                               // never leave the court undefined
+  if (SOCCER){ round.mods = []; round.wild = null; }                 // football is chaotic enough
   for (const m of round.mods) m.f(round);
+  if (SOCCER){ round.ballColor = '#ffffff'; round.ballR = 17; round.bounce = .72; }
   if (round.slip && !(!keepScore && wallMap()) && !vampNight() && !round.bloodMoon)
     round.map = mapNamed('SNOW COURT') || round.map;   // ice needs snow around it
   try {                                                              // and he likes it near the sea: about a third of his games end up on the water
@@ -3791,6 +3802,10 @@ function paintScore(){
 
 /* ============================ GEOMETRY ============================ */
 function hoopFor(side){
+  if (SOCCER){
+    const x = goalLine(side);
+    return {x, y: FLOOR - GOAL_H*.45, half: 30, boardX: x + side*GOAL_D, poleX: x + side*GOAL_D, side};
+  }
   const x = side < 0 ? 152 : W-152;
   const half = round.rimHalf*(typeof rimFixMul === 'function' ? rimFixMul(side) : 1);
   return {x, y:round.hoopY, half,
@@ -12382,6 +12397,7 @@ function sfxSleight(){
   lead(t + .2, 300, .3, .04, 'sine');
 }
 function tryCatch(ch){
+  if (SOCCER) return;                                  // no hands
   if (ball.holder || ch.grabCd > 0 || ball.inJaws) return;
   const s = scaleOf(ch), sw = ch.swing > 0;
   if (Math.hypot(ball.vx,ball.vy) > 640 && !sw) return;
@@ -12413,7 +12429,21 @@ function capBall(){
   if (sp > BALL_MAX){ ball.vx *= BALL_MAX/sp; ball.vy *= BALL_MAX/sp; }
 }
 function bodyBounce(ch, dt){
+  if (ch.kickCd > 0) ch.kickCd -= dt;
   if (ball.holder) return;
+  if (SOCCER && !(ch.kickCd > 0) && !scoreLock){
+    const s = scaleOf(ch), fy = ch.y - 9*s;
+    if (Math.hypot(ball.x - ch.x, ball.y - fy) < ball.r + 15*s){
+      const dir = teams[ch.team].attack;
+      const air = !ch.ground;                          // a volley goes higher than a ground kick
+      ball.vx = dir*rnd(480, 720) + ch.vx*.35;
+      ball.vy = -(air ? rnd(380, 560) : rnd(160, 380));
+      ball.x = ch.x + dir*(ball.r + 16*s);             // out in front so it doesn't stick to the boot
+      ball.spin += dir*.4; ch.kickCd = .22;
+      sfxBump(.35); shake = Math.max(shake, 3);
+      return;
+    }
+  }
   if (ball.noHitT > 0 && ball.noHit === ch.team) return;   // the shot is still clearing its own team's arms
   if (unblockable() && ball.shotBy != null && ball.shotBy !== ch.team) return;   // a called shot is not getting blocked
   const s = scaleOf(ch);
@@ -12476,6 +12506,7 @@ function updateBall(dt){
     if (v > 120) sfxThud(v/4000);
     if (Math.abs(ball.vy) < 45) ball.vy = 0;
   }
+  if (SOCCER){ soccerGoals(); return; }
   for (const side of [-1,1]){
     const h = hoopFor(side);
     let rim = circleHit(ball, h.x-h.half, h.y, 4, .5);
@@ -12516,6 +12547,65 @@ function updateBall(dt){
   }
 }
 
+function soccerGoals(){
+  const top = FLOOR - GOAL_H;
+  for (const side of [-1, 1]){
+    const lx = goalLine(side), back = lx + side*GOAL_D;
+    if (circleHit(ball, lx, top, 5, .6) && rimCd <= 0){   // off the bar
+      rimCd = .12; sfxClank(); shake = Math.max(shake, 5);
+    }
+    const past = side < 0 ? ball.x < lx : ball.x > lx;
+    if (!past) continue;
+    if (scoreLock){                                       // already in: the net holds it
+      if (ball.y - ball.r < top){ ball.y = top + ball.r; ball.vy = Math.abs(ball.vy)*.2; }
+      if (side < 0 ? ball.x - ball.r < back : ball.x + ball.r > back){
+        ball.x = back - side*ball.r; ball.vx = -ball.vx*.15;
+      }
+      netAnim[side < 0 ? 0 : 1] = 1;
+      continue;
+    }
+    if (ball.y < top){                                    // over the bar: the stand sends it back
+      ball.x = lx - side*ball.r; ball.vx = -side*Math.abs(ball.vx)*.55;
+      continue;
+    }
+    if (stopped()) continue;
+    const t = teams.find(tm => tm.attack === side);
+    netAnim[side < 0 ? 0 : 1] = 1;
+    awardBasket(t, 1, 'GOAL!');
+    return;
+  }
+}
+function drawGoal(side, front){
+  const lx = goalLine(side)*S, bx = (goalLine(side) + side*GOAL_D)*S;
+  const top = (FLOOR - GOAL_H)*S, bot = BF, droop = 9;
+  const fill = (x, y, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(x, y, w, h); };
+  if (!front){
+    const sway = netAnim[side < 0 ? 0 : 1]*2;
+    ctx.globalAlpha = .5;
+    for (let x = Math.min(lx, bx); x <= Math.max(lx, bx); x += 3){         // net: verticals
+      const u = Math.abs(x - lx)/Math.abs(bx - lx);
+      const yt = top + droop*u, off = Math.sin(T*9 + x)*sway*u;
+      fill(x + off, yt, .5, bot - yt, '#e9edf2');
+    }
+    for (let y = top; y <= bot; y += 3){                                    // and the rows across
+      const x0 = Math.min(lx, bx), x1 = Math.max(lx, bx);
+      fill(x0, y, x1 - x0, .5, '#e9edf2');
+    }
+    ctx.globalAlpha = 1;
+    fill(bx - .75, top + droop, 1.5, bot - top - droop, '#9aa0aa');         // back stanchion
+    ctx.strokeStyle = '#c9ced6'; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.moveTo(lx, top); ctx.lineTo(bx, top + droop); ctx.stroke();
+    ctx.globalAlpha = .3; ctx.fillStyle = '#000';
+    ctx.beginPath(); ctx.ellipse((lx + bx)/2, bot + 2, Math.abs(bx - lx)/2 + 3, 2.5, 0, 0, Math.PI*2); ctx.fill();
+    ctx.globalAlpha = 1;
+    return;
+  }
+  fill(lx - 2, top - 1, 4, bot - top + 1, INK);                             // front post, outlined
+  fill(lx - 1.25, top, 2.5, bot - top, '#ffffff');
+  fill(lx + (side < 0 ? .5 : -1.25), top, .75, bot - top, '#c9ced6');
+  fill(lx - 2.5, top - 2, 5, 3, INK);                                       // the end of the crossbar
+  fill(lx - 1.75, top - 1.25, 3.5, 1.75, '#ffffff');
+}
 let goldHours = 0, onlineMul = 2;
 function awardBasket(t, bonus, label){
   bonus = bonus || 1;
@@ -14626,6 +14716,7 @@ function drawNet(g, front){
   }
 }
 function drawHoopBack(side){
+  if (SOCCER) return drawGoal(side, false);
   const g = hoopGeo(side), {cx, cy, rx, bx, px, side: sd} = g;
   const glow = mapGlow(), defTeam = teams.find(t => t.attack === -sd) || teams[0];
   // shadows and a wet-floor reflection of the stand
@@ -14725,6 +14816,7 @@ function drawHoopBack(side){
   drawNet(g, false);
 }
 function drawHoopFront(side){
+  if (SOCCER) return drawGoal(side, true);
   const g = hoopGeo(side);
   drawNet(g, true);
   rimRing(g, 0, Math.PI);                                                          // near half, over the net
@@ -15185,6 +15277,29 @@ function drawBall(bx, by, r){
       ctx.arc(bx, by, r+1, ball.spin + i*Math.PI/3, ball.spin + (i+1)*Math.PI/3);
       ctx.closePath(); ctx.fill();
     }
+    ctx.restore();
+    return;
+  }
+  if (SOCCER){                                        // white with black patches that turn with the spin
+    disc(bx, by, r, '#f7f8fa');
+    ctx.save();
+    ctx.beginPath(); ctx.arc(Math.round(bx), Math.round(by), r, 0, Math.PI*2); ctx.clip();
+    const patch = (px, py, pr) => {
+      ctx.beginPath();
+      for (let k = 0; k < 5; k++){
+        const a = ball.spin + k*Math.PI*2/5 - Math.PI/2;
+        ctx.lineTo(px + Math.cos(a)*pr, py + Math.sin(a)*pr);
+      }
+      ctx.closePath(); ctx.fill();
+    };
+    ctx.fillStyle = '#1b1a22';
+    patch(bx, by, r*.36);
+    for (let k = 0; k < 5; k++){
+      const a = ball.spin + k*Math.PI*2/5 + Math.PI/2;
+      patch(bx + Math.cos(a)*r*.86, by + Math.sin(a)*r*.86, r*.3);
+    }
+    ctx.globalAlpha = .22; ctx.fillStyle = '#5a6070';                     // shade the lower right
+    ctx.beginPath(); ctx.arc(bx + r*.35, by + r*.35, r, 0, Math.PI*2); ctx.fill();
     ctx.restore();
     return;
   }
@@ -19431,6 +19546,7 @@ function syncUI(){
   const p1 = document.getElementById('p1Btn'), p2 = document.getElementById('p2Btn');
   if (p1) p1.style.display = on ? 'none' : '';
   if (p2) p2.style.display = on ? 'none' : '';
+  const sb = document.getElementById('soccerBtn'); if (sb) sb.style.display = on ? 'none' : '';
   document.getElementById('reset').style.display = guest ? 'none' : ''; document.getElementById('menu').style.display = guest ? 'none' : '';
   b2.disabled = on ? !guest : (vsCPU && screenMode !== 'title');
   b1.disabled = guest;
@@ -19439,8 +19555,9 @@ function syncUI(){
   teams[1].cpu = vsCPU;
   paintScore();
 }
-document.getElementById('p1Btn').onclick = () => { audioInit(); resumeAudio(); startGame(true); };
-document.getElementById('p2Btn').onclick = () => { audioInit(); resumeAudio(); startGame(false); };
+document.getElementById('p1Btn').onclick = () => { audioInit(); resumeAudio(); SOCCER = false; startGame(true); };
+document.getElementById('p2Btn').onclick = () => { audioInit(); resumeAudio(); SOCCER = false; startGame(false); };
+document.getElementById('soccerBtn').onclick = () => { audioInit(); resumeAudio(); SOCCER = true; startGame(true); };
 const pauseBtn = document.getElementById('pauseBtn'), musicBtn = document.getElementById('musicBtn');
 const ICON = {
   pause: '<svg viewBox="0 0 10 10"><rect x="2" y="1" width="2" height="8" fill="#1b1a22"/><rect x="6" y="1" width="2" height="8" fill="#1b1a22"/></svg>',
