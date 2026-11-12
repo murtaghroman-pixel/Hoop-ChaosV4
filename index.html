@@ -797,6 +797,9 @@
 
 <script src="art1.js"></script>
 <script src="art2.js"></script>
+<script src="art3.js"></script>
+<script src="art4.js"></script>
+<script src="art5.js"></script>
 <script>
 (() => {
 "use strict";
@@ -5468,9 +5471,10 @@ function brRead(t, D){
   return S;
 }
 /* ---- the questions ---- */
-const brStop   = S => S.threat >= 3;                                                         // it is going in unless something happens now
-const brGuard  = S => S.threat >= 3 || (S.foeH && S.foeGap < 360) || (S.matchFoe && S.threat >= 2);   // a wall that holds a few seconds: up as he gets set
-const brCancel = S => S.foeH && (S.foeShoot || S.dunkIn || S.foeGap < 300 || (S.threat >= 2 && S.idle > 3));   // take it out of his hands
+const brStop   = S => brGuard(S);   /*ai2*/                                                         // it is going in unless something happens now
+const brCommit = S => !!S.shotIn || S.dunkIn;   /*ai2*/ // the shot has left his hand, or the dunk has launched: nothing he can do about it now
+const brGuard  = S => brCommit(S) || (S.matchFoe && S.foeShoot && S.foeGap < 600);   // a wall that holds a few seconds: up when the shot is actually going, not when he picks it up or winds up (he may be baiting it)
+const brCancel = S => S.foeH && (S.foeShoot || S.dunkIn || (S.foeGap < 300 && S.idle > 2.5) || (S.threat >= 2 && S.idle > 3));   /*ai1*/   // take it out of his hands
 const brTouch  = S => S.foeH && S.close && S.threat >= 1;                                    // needs my man next to his
 const brField  = S => S.threat >= 2;                                                         // area move on a man who is coming
 const brAhead  = S => S.foeH && S.foeGap > 160 && S.foeGap < 700;                            // a trap, laid before he arrives
@@ -5481,6 +5485,20 @@ const BRAIN = {
   // -------- stop the basket
   lockdown: brGuard, seal: brGuard, sunseal: brGuard, phalanx: S => brGuard(S) && CITY.phal <= 0, pines: S => brGuard(S) && !PINE.on,
   hoopweb: brGuard, coil: brGuard, updraft: brGuard,
+  whiteout: S => (DRG.on && DRG.side === S.id && DRG.ph !== 'rise') || (S.foeH && (S.foeShoot || (S.close && S.foeGap < 520))),   /*ai2*/
+  deliver: S => !DRG.on && playT > 2.1 && ((S.hasBall && S.gap > 260 && (S.crowded || S.blockers > 0)) || (S.foeH && (S.foeShoot || S.dunkIn)) || (S.loose && S.rec)),
+  drake: S => !DRG.on && playT > 2.1 && ((S.hasBall && S.gap > 260 && (S.crowded || S.blockers > 0)) || (S.foeH && (S.foeShoot || S.dunkIn)) || (S.loose && S.rec)),
+  weave: S => playT > 1 && (S.threat >= 2 || (S.hasBall && S.chance >= 1 && S.blockers > 0)),
+  bonerang: S => brCancel(S) || (S.loose && S.rec),
+  calc: S => S.rec || (S.hasBall && S.chance >= 1),
+  well: S => S.threat >= 2,
+  broadside: S => (S.hasBall && S.chance >= 1) || (S.foeH && S.threat >= 2),
+  tail: S => S.foeH && (S.close || S.threat >= 2),
+  grab: S => S.rec || brGrab(S) || brCancel(S),
+  keg: brAhead,
+  charge: S => S.foeH && S.foeGap < 520 && (S.threat >= 1),
+  payoff: S => S.foeH && (S.foeShoot || S.dunkIn || (S.foeGap < 260 && S.idle > 2)),
+  roots: S => !ROOTS.on && playT > 1.2 && ((S.hasBall && S.chance >= 1 && S.gap <= S.t.brQuick + 190 && (S.crowded || S.blockers > 0 || S.fd < 340)) || (S.foeShoot && S.foeGap < 650) || S.dunkIn),   /*ai1*/
   overrule: S => brStop(S) && CITY.rule <= 0,
   upside: S => !!S.shotIn,
   wall: brStop, quake: S => brStop(S) || (S.foeH && S.foeGap < 250), shield: S => brGrab(S) || (S.foeH && S.foeGap < 380),
@@ -5524,9 +5542,9 @@ const BRAIN = {
   wave: S => (atSea() ? true : S.foeH) && brSet(S)
 };
 /* the move says yes; the old rule still gets a veto, because it knows the preconditions (no second dragon, not while a world is already folded) */
-const BRAIN_AND = {lockdown:1, seal:1, sunseal:1, hoopweb:1, coil:1, updraft:1, wall:1, shield:1, katana:1, truck:1, bat:1, swap:1, wave:1, shatter:1, worm:1, eye:1, decree:1, transmute:1, buyout:1, valhalla:1, abduct:1, extract:1,
+const BRAIN_AND = {weave:1, bonerang:1, lockdown:1, seal:1, sunseal:1, hoopweb:1, coil:1, updraft:1, wall:1, shield:1, katana:1, truck:1, bat:1, swap:1, wave:1, shatter:1, worm:1, eye:1, decree:1, transmute:1, buyout:1, valhalla:1, abduct:1, extract:1,
   mimic:1, stoppage:1, ironw:0, hustle:0, storm:1, supernova:1};
-const BRAIN_HOLD = {cage:1, lockdown:1, seal:1, sunseal:1, phalanx:1, pines:1, hoopweb:1, coil:1, overrule:1, upside:1, wall:1, quake:1, shield:1};   // walls and locks wait for the shot; power plays and steals are worth more on the clock than held back
+const BRAIN_HOLD = {roots:1, cage:1, lockdown:1, seal:1, sunseal:1, phalanx:1, pines:1, hoopweb:1, coil:1, overrule:1, upside:1, wall:1, quake:1, shield:1};   // walls and locks wait for the shot; power plays and steals are worth more on the clock than held back
 function brDecide(t, kind, holder, atk, slot){
   if (brOff(t)) return undefined;
   const key = slot === 2 ? 'brUse2' : 'brUse';
@@ -5751,6 +5769,7 @@ function botThink(t, dt){
   if (holder && holder.team === t.id){
     t.possess += D.tick;
     if (holder.charging || holder.shootQ || t.cd > 0) return;
+    if (ROOTS.on && ROOTS.side === t.id && ROOTS.t < .42) return;   /*ai1*/ // the roots are still going out: let them land, then shoot over the top
     const gap = Math.abs(holder.x - atk.x);
     const foeDist = Math.min(1e9, ...chars.filter(c => c.team !== t.id && !c.eaten)
                                           .map(c => Math.hypot(c.x-holder.x, c.y-holder.y)));
@@ -5954,6 +5973,7 @@ function abKey2(id){
     if (sk0 && (sk0.baseId || sk0.id) === 'omen' && spaceMap() && !NET.role && !(round && round.orb && round.orb.team === id)) return 'supernova'; }   // ...unless the ball is already in orbit: then the key is APOAPSIS, the combo
   /* A boss turns up having done the work: he is in his dark form and he has
      the second move that comes with it. An ordinary CPU still does not. */
+  if (BOSS && BOSS.quest === 8 && !bossSide(id)) return 'eldorado';   /*v81*/ // the last fight: the Sun has chosen you, and you have what a prestiged Midas has
   if (bossSide(id)){
     if (BOSS && BOSS.quest === 5) return null;                    // Blackpowder on the road has not prestiged yet: one move
     const bsk = teamSkin(id);
@@ -19199,7 +19219,7 @@ function awardBasket(t, bonus, label){
   if (label) flash = mkFlash(label, '', t.color, 2);
   else if (bonus === 1) flash = mkFlash(pick(CALLS), round.points*bonus > 1 ? '+'+(round.points*bonus) : '', t.color, 2);
   if (mintX){ flash = mkFlash(mintX === 2 ? 'PURE GOLD' : 'SILVER', '+' + (round.points*bonus + mintX), mintX === 2 ? '#ffd24a' : '#d5dbe3', 2); sfxGild(); }
-  /*sun*/ if (BOSS && BOSS.quest === 8 && !BOSS.rematch && !FINAL.sun && t.id !== mySide()){ if (t.score > 4) t.score = 4; paintScore(); if (t.score >= 4){ finalSunMoment(); return; } }
+  /*v81: no four-nil trap; the Sun is with you from the start*/
   if (t.score >= WIN_SCORE){ winner = t; freeze = 1e9; slow = 0; sfxWin();
                              if (BOSS) bossResolve(t.id);
                              else if (TOUR.live) tourResolve(t.id);
@@ -24869,7 +24889,7 @@ function cupFinish(place, quiet){
     let chance = .03;
     if (!SAVE.owned.skin.includes('golden')){
       if (typeof SAVE.midasMiss !== 'number') SAVE.midasMiss = Math.max(0, (SAVE.cupWins | 0) - 1);
-      chance = SAVE.midasMiss >= 39 ? 1 : .03 + SAVE.midasMiss*.0016;
+      chance = .03 + Math.min(39, SAVE.midasMiss)*(.02/39);   /*v82*/ // 3% on the first win, creeping up to 5% by the 40th; never a sure thing
     }
     if (Math.random() < chance){
       if (!SAVE.owned.skin.includes('golden')) SAVE.midasMiss = 0;
@@ -25192,7 +25212,7 @@ function cupShowPaint(){
   } else {
     h.textContent = k === 'purse' ? (d.place === 1 ? 'THE PURSE' : (CUP_PLACE[d.place] || 'OUT')) : k === 'midas' ? 'THE TROPHY CHARACTER' : k === 'dark' ? 'A DARK FORM' : 'ALL DONE';
     if (k === 'purse'){ sub.textContent = d.place === 1 ? 'Somewhere between 40,000 and 100,000' : 'What the round you reached pays'; }
-    if (k === 'midas'){ sub.textContent = d.hadMidas ? 'MIDAS is yours. 3% chance of a new character' : '3% chance every cup win, and it climbs the longer you go without'; }
+    if (k === 'midas'){ sub.textContent = d.hadMidas ? 'MIDAS is yours. 3% chance of a new character' : '3% chance every cup win, creeping up to 5% by win 40'; }
     if (k === 'dark'){ sub.textContent = '8% chance. Put it on any character you own.'; }
     if (k === 'end'){
       card.classList.add('on', 'sum'); front.textContent = '';
@@ -29774,6 +29794,10 @@ function finalIntro(){
     {st: {shot: 'top'}, sfx: 'drone', nar: 1, t: 'At the top the wind is screaming. The Sun hangs over the empty throne, and Blackpowder is reaching for it.'},
     Object.assign({st: {shot: 'sun'}, sfx: 'shimmer', t: '"Do you know what it does, Midas? It does not make gold. It makes you GOLDEN. Nothing touches you. Nothing ever touches you again."'}, BPW),
     Object.assign({st: {shot: 'top', sunUp: 1}, t: '"Then come and get it."'}, YOU),
+    {scene: 'final48', st: {shot: 'gem'}, sfx: 'step', nar: 1, t: 'Hands, in the smoke. Yara, beside you, pushing something into your fist.'},
+    Object.assign({t: '"Take it. It was behind the Sun, in the keeper\'s hand. The Sun was a mirror, Midas. This is the thing the mirror was copying."'}, YARA),
+    {st: {shot: 'reach'}, sfx: 'shimmer', nar: 1, t: 'You close your hand on it. It is warm. It gets warmer. Above you the Sun, which has been a mirror for a hundred years, begins to glow by itself.'},
+    {st: {shot: 'sunwarm'}, sfx: 'drone', flash: 1, nar: 1, t: 'It does not come down to you. It has chosen. When the barrels come, press your second move, and the Sun will take them out of the air.'},
     {scene: 'black', nar: 1, big: 1, t: 'THE FINAL CONFRONTATION', auto: 1800}
   ];
 }
@@ -29936,7 +29960,9 @@ function finalFight(){
   finalReset(); BOSS = b; closeShop(); bossMusicStart(b);
   diff = 0; level = LEVELS.length - 1;
   startGame(true);
-  flash = mkFlash('BLACKPOWDER', 'THE BARRELS ARE LIT. THE LAST FIGHT.', '#ff7a5a', 3.4);
+  flash = mkFlash('THE SUN CHOOSES YOU', 'PRESS YOUR SECOND MOVE: EL DORADO. IT TAKES HIS CANNONBALLS.', '#ffd24a', 4.2);   /*v81*/
+  try { const t0 = A.ctx.currentTime; boom(t0, .7); cymbal(t0, .3, .6); eldSfx('shimmer'); } catch (e){}
+  setTimeout(() => { if (BOSS && BOSS.quest === 8 && !winner) flash = mkFlash('BLACKPOWDER', 'THE BARRELS ARE LIT. THE LAST FIGHT.', '#ff7a5a', 2.6); }, 4300);
   return null;
 }
 function finishFinal(b, winId){
@@ -33434,7 +33460,309 @@ eldPicAdd('gate', ART[59], [[552, 520, 150], [1128, 520, 150]]);
 eldPicAdd('rim', ART[60], [[980, 500, 90], [965, 640, 80]], .9);
 eldPicAdd('steps', ART[61], [[345, 560, 110], [1365, 560, 110], [535, 440, 60], [1140, 440, 60], [840, 455, 90]], .9);
 eldPicAdd('edge', ART[62], [[425, 510, 120], [1245, 510, 120]], .9);
+eldPicAdd('jungle', ART[63]);   /*jgp2*/
+/*hc1*/ /* THE CAST AT 3px: Midas and Blackpowder, drawn on a 64x96 sprite (about the size of the pixels in the pictures), outlined, shaded, and then lit to match the scene they
+   stand in: the green fill of the jungle, a pale rim on the side the light comes from, darker at the feet. Arms start at the shoulder, so nothing floats. */
+let HC_S = null;
+const HC_MIDAS = {skin: '#e0aa66', skin2: '#b88048', hair: '#4a2a10', shirt: '#e6b422', shirt2: '#b2860e', pants: '#8c6a2a', boot: '#5a3a1a', pack: '#6a4222', strap: '#b02a1a', gold: '#f2c830', gold2: '#a8780c'};
+const HC_BP = {skin: '#a8714a', skin2: '#7a4a2c', hair: '#141010', coat: '#34181a', coat2: '#1e0e10', pants: '#241c18', boot: '#14100e', cuff: '#8a5a30', sash: '#a82a22', gold: '#e0b840', hat: '#18141a'};
+const HC_L_DAY = {amb: [.93, 1, .92], haze: [92, 150, 120, .07], rim: [214, 246, 206], line: [16, 26, 22], dl: -1};
+const HC_L_NIGHT = {amb: [.26, .34, .62], haze: [10, 16, 48, .30], rim: [86, 108, 190], line: [4, 6, 16], dl: -1};
+function hcLimb(s, x0, y0, dx, len, w, c1, c2, hand){ for (let i = 0; i < len; i++){ s.fillStyle = i >= len - hand ? c2 : c1; s.fillRect(Math.round(x0 + dx*i/len), y0 + i, w, 1); } }
+function hcMidas(s, o){
+  const P = HC_MIDAS, ph = o.walk, sw = ph == null ? 0 : Math.sin(ph), bob = ph == null ? 0 : -Math.round(Math.abs(sw)*2);
+  const F = (x, y, w, h, c) => { s.fillStyle = c; s.fillRect(x, y + bob, w, h); }, G = (x, y, w, h, c) => { s.fillStyle = c; s.fillRect(x, y, w, h); };
+  const leg = (x0, dx, c) => { hcLimb(s, x0, 62, dx, 24, 7, c, c, 0); const xe = x0 + dx; G(xe - 1, 85, 10, 7, P.boot); G(xe + 7, 88, 3, 4, P.boot); G(xe - 1, 85, 10, 1, '#7a5228'); };
+  leg(29, Math.round(-sw*8) - (ph == null ? 2 : 0), '#5e4818'); leg(34, Math.round(sw*8) + (ph == null ? 1 : 0), P.pants);
+  if (!o.hang) hcLimb(s, 30, 38 + bob, Math.round(sw*7), 22, 5, P.shirt2, P.skin2, 5);                              // the far arm, behind him
+  F(15, 38, 10, 22, P.pack); F(15, 38, 10, 5, '#82583a'); F(15, 43, 10, 1, '#4a2e16'); F(25, 37, 3, 23, P.strap);   // the backpack and its strap
+  F(24, 36, 17, 28, P.shirt); F(24, 62, 18, 4, P.shirt2); F(24, 58, 17, 4, '#5a3a1a'); F(31, 58, 4, 4, P.gold);         // tunic, hem, belt, buckle
+  F(33, 43, 5, 5, '#f4ecd0'); F(34, 44, 3, 3, P.gold2);                                                                 // the sun on his chest
+  F(23, 36, 18, 3, P.gold); F(28, 35, 10, 2, P.gold2);                                                                  // shoulders and collar
+  if (o.hang){ G(19, 5, 6, 33, P.shirt2); G(19, 0, 6, 6, P.skin2); G(41, 5, 6, 33, P.shirt); G(41, 0, 6, 6, P.skin); }
+  else if (o.map){ F(32, 40, 18, 5, P.shirt); F(50, 39, 5, 6, P.skin); }
+  else { hcLimb(s, 31, 38 + bob, Math.round(-sw*7), 22, 1, P.shirt2, P.skin2, 5); hcLimb(s, 32, 38 + bob, Math.round(-sw*7), 22, 5, P.shirt, P.skin, 5); }                                           // the near arm, from the shoulder
+  if (o.map){ F(48, 28, 18, 14, '#d8c090'); F(48, 28, 18, 2, '#a88a58'); F(52, 34, 11, 1, '#8a2a1a'); F(56, 31, 1, 7, '#8a2a1a'); }
+  F(30, 31, 7, 6, P.skin2); F(26, 14, 16, 18, P.skin); F(42, 21, 3, 4, P.skin); F(42, 24, 3, 1, P.skin2); F(25, 13, 6, 14, P.hair); F(29, 22, 3, 5, P.skin2);
+  F(37, 20, 2, 4, '#141010'); F(36, 18, 4, 1, P.hair); F(38, 28, 4, 1, '#5a2a1a');
+  F(25, 10, 18, 5, P.gold); F(25, 5, 4, 5, P.gold); F(31, 3, 5, 7, P.gold); F(38, 5, 4, 5, P.gold); F(25, 10, 18, 1, '#fff0a0'); F(25, 14, 18, 1, P.gold2); F(32, 11, 4, 3, '#2a8ad8'); F(33, 11, 1, 1, '#b8e8ff');
+}
+function hcBP(s, o){
+  const P = HC_BP, ph = o.walk, sw = ph == null ? 0 : Math.sin(ph), bob = ph == null ? 0 : -Math.round(Math.abs(sw)*2), sy = ph == null ? 0 : Math.round(sw*2);
+  const F = (x, y, w, h, c) => { s.fillStyle = c; s.fillRect(x, y + bob, w, h); }, G = (x, y, w, h, c) => { s.fillStyle = c; s.fillRect(x, y, w, h); };
+  hcLimb(s, 24, 58, -9, 22, 2, '#a4aab2', '#a4aab2', 0); G(22, 55, 5, 3, P.gold); G(23, 58, 3, 2, '#3a2a1a');             // the cutlass on his hip
+  const leg = (x0, dx) => { hcLimb(s, x0, 66, dx, 22, 7, P.pants, P.pants, 0); const xe = x0 + dx; G(xe - 2, 76, 11, 4, P.cuff); G(xe - 1, 80, 9, 12, P.boot); G(xe + 7, 87, 4, 5, P.boot); G(xe - 2, 76, 11, 1, '#b88a50'); };
+  leg(29, Math.round(-sw*8) - (ph == null ? 2 : 0)); leg(34, Math.round(sw*8) + (ph == null ? 1 : 0));
+  if (!o.pistol) hcLimb(s, 30, 38 + bob, Math.round(sw*6), 24, 5, P.coat2, P.skin2, 5);
+  F(21, 36, 22, 36, P.coat); F(19 - sy, 70, 25 + sy, 8, P.coat2); F(19 - sy, 76, 25 + sy, 1, P.cuff);                       // the long coat and its hem
+  F(36, 36, 7, 34, P.coat2); F(36, 36, 1, 34, P.gold); F(36, 37, 5, 11, '#e6dccb'); F(35, 38, 6, 2, '#ffffff'); F(36, 43, 4, 1, '#c8bca8');   // the lapel, the jabot
+  F(39, 49, 2, 2, P.gold); F(39, 54, 2, 2, P.gold);
+  F(21, 57, 23, 5, P.sash); F(21, 57, 23, 1, '#d8483a'); F(35, 60, 5, 8, P.sash); F(36, 68, 1, 4, '#e0c060'); F(38, 68, 1, 4, '#e0c060');   // the red sash
+  if (o.pistol){ F(33, 41, 14, 5, P.coat); F(47, 40, 6, 6, P.skin); F(52, 40, 12, 3, '#3a3a40'); F(60, 40, 4, 2, '#6a6a72'); F(52, 43, 3, 4, '#5a3a1e'); }
+  else { hcLimb(s, 31, 38 + bob, Math.round(-sw*6), 24, 1, '#c8a050', P.skin2, 5); hcLimb(s, 32, 38 + bob, Math.round(-sw*6), 24, 5, P.coat, P.skin, 5); }
+  F(30, 31, 7, 6, P.skin2); F(26, 14, 16, 18, P.skin); F(42, 22, 3, 4, P.skin); F(29, 22, 3, 5, P.skin2); F(29, 24, 2, 2, P.gold);
+  F(29, 26, 13, 7, P.hair); F(36, 24, 8, 2, P.hair); F(38, 27, 3, 1, '#a85a40');                                          // beard and moustache
+  F(35, 19, 6, 5, '#0a0808'); F(27, 17, 3, 1, '#0a0808'); F(30, 18, 3, 1, '#0a0808'); F(33, 19, 3, 1, '#0a0808'); F(36, 17, 5, 1, P.hair);   // the eyepatch and its strap
+  F(19, 11, 28, 4, P.hat); F(16, 9, 6, 3, P.hat); F(44, 9, 6, 3, P.hat); F(26, 3, 15, 9, P.hat); F(19, 14, 28, 1, '#c8a050'); F(26, 3, 15, 1, '#34303a');   // the tricorn
+  F(33, 5, 5, 4, '#e8e0d0'); F(34, 6, 1, 1, P.hat); F(36, 6, 1, 1, P.hat); F(34, 9, 3, 1, '#e8e0d0');                    // a skull on it
+}
+function hcChar(g, x, y, o){
+  if (!HC_S){ HC_S = document.createElement('canvas'); HC_S.width = 64; HC_S.height = 96; }
+  const s = HC_S.getContext('2d'); s.imageSmoothingEnabled = false; s.clearRect(0, 0, 64, 96);
+  if (o.who === 'bp') hcBP(s, o); else hcMidas(s, o);
+  const L = o.light || HC_L_DAY, lx = (L.dl || -1)*(o.flip ? -1 : 1), d = s.getImageData(0, 0, 64, 96), D = d.data, out = new Uint8ClampedArray(D), W = 64, H = 96, t = o.t || 0;
+  const op = (a, b) => a >= 0 && b >= 0 && a < W && b < H && D[(b*W + a)*4 + 3] > 0;
+  for (let b = 0; b < H; b++) for (let a = 0; a < W; a++){ const i = (b*W + a)*4;
+    if (D[i + 3] > 0){
+      const nx = Math.max(-1, Math.min(1, (a - 32)/13)), f = (1 + .15*nx*lx) * (b < 24 ? 1.06 : b > 78 ? .86 : 1) * (1 + (((a*7 + b*3 + Math.floor(t*2)) % 13) < 2 ? .07 : 0));
+      let r = D[i]*f*L.amb[0], gg = D[i + 1]*f*L.amb[1], bl = D[i + 2]*f*L.amb[2]; const hz = L.haze[3]; r = r*(1 - hz) + L.haze[0]*hz; gg = gg*(1 - hz) + L.haze[1]*hz; bl = bl*(1 - hz) + L.haze[2]*hz;
+      if (!op(a + lx, b)){ r = r*.55 + L.rim[0]*.45; gg = gg*.55 + L.rim[1]*.45; bl = bl*.55 + L.rim[2]*.45; }
+      out[i] = r; out[i + 1] = gg; out[i + 2] = bl; }
+    else if (op(a - 1, b) || op(a + 1, b) || op(a, b - 1) || op(a, b + 1)){ out[i] = L.line[0]; out[i + 1] = L.line[1]; out[i + 2] = L.line[2]; out[i + 3] = 255; } }
+  d.data.set(out); s.putImageData(d, 0, 0);
+  const k = o.k || 3, rw = (c, w) => Math.round(c - w/2);
+  g.fillStyle = L === HC_L_NIGHT ? 'rgba(4,8,20,.42)' : 'rgba(10,30,18,.34)';
+  for (const [dy, w] of [[-3, 52], [3, 70], [9, 48]]) g.fillRect(rw(x, w*k/3), Math.round(y + dy*k/3), Math.round(w*k/3), Math.round(6*k/3));
+  g.save(); g.imageSmoothingEnabled = false; g.translate(Math.round(x), Math.round(y)); g.scale(o.flip ? -k : k, k); g.drawImage(HC_S, -32, -92); g.restore();
+}
+/*jgp2*/ /* THE BUSH WALK: one long picture of the jungle (five pieces of pixel art joined into a loop) slides past behind him. Nothing is drawn over it that isn't
+   its own chunky pixels: waterfalls and the lake are animated in place, birds and butterflies and falling leaves cross in front, mist drifts through. */
+const JG_FALLS = [[1210, 1306, 280, 490], [2690, 2790, 272, 492], [6885, 6965, 424, 585]], JG_LAKES = [[900, 1560, 522, 600], [1990, 2960, 520, 612], [6940, 7240, 604, 700]], JG_RIPS = [[1050, 560], [1450, 590], [2252, 605], [2547, 640], [2870, 590], [7020, 655], [7140, 670]];
+const jgMod = (v, m) => ((v % m) + m) % m;
+let jgMid = null;
+function jgParrot(g, x, y, t, i, flip){ const f = Math.sin(t*10 + i*2) > 0 ? 1 : 0, s = flip ? -1 : 1;
+  R2(g, x, y, 6, 2, '#3aa83a'); R2(g, x + 5*s, y - 1, 3, 3, '#d82a2a'); R2(g, x + 8*s + (s < 0 ? -1 : 0), y, 1, 1, '#f0c030'); R2(g, x - 5*s, y + 1, 5, 1, '#2a8a3a'); R2(g, x - 8*s, y + 1, 3, 1, '#2a6ad8'); R2(g, x + 1, y - 3 + f*4, 3, 3, '#2a8a3a'); R2(g, x + 3 - 4*f, y - 4 + f*6, 5, 1, '#f0d030'); }
+function sceneJunglePano(g, t, st){
+  const P = ELD_PICS.jungle, W = g.canvas.width, H = g.canvas.height, PW = P.img.width, night = !!st.night, walk = !!st.walk;
+  if (st._jg0 == null) st._jg0 = Math.random()*PW;
+  const X = jgMod(st._jg0 + t*(walk ? 118 : 12), PW), x0 = Math.floor(X), w1 = Math.min(W, PW - x0), sx = px => jgMod(px - X + 400, PW) - 400, q = v => Math.round(v/6)*6;
+  g.imageSmoothingEnabled = false; picDraw(g, P.img, W, 941, t, [[0, 330, 9, .9, 0], [330, 640, 4, 1.3, 1.5], [860, 941, 6, 1.2, 3]], 0, 0, X);   /*act1*/
+  // the water: light sliding on it, and rings spreading where something has risen
+  for (const [a, b, y0, y1] of JG_LAKES) for (let i = 0; i < 22; i++){ const u = jgMod(i*137 + t*(6 + i % 4)*2.2, b - a), x = sx(a + u), y = y0 + (i*53) % (y1 - y0); if (x < -30 || x > W + 30) continue;
+    g.fillStyle = 'rgba(236,250,246,' + (.18 + .22*Math.sin(t*1.3 + i*1.7)**2).toFixed(2) + ')'; g.fillRect(q(x), q(y), (i % 3 + 2)*6, 6); }
+  for (let k = 0; k < JG_RIPS.length; k++){ const u = jgMod(t*.3 + k*.37, 1), cx = sx(JG_RIPS[k][0]), cy = JG_RIPS[k][1]; if (cx < -80 || cx > W + 80) continue;
+    for (const [rr, al] of [[8 + u*54, .75*(1 - u)], [4 + u*26, u < .5 ? .6*(1 - u*2) : 0]]){ if (al <= 0) continue; g.fillStyle = 'rgba(236,250,246,' + al.toFixed(2) + ')'; for (let a = 0; a < 6.283; a += 1/Math.max(3, rr*.12)) g.fillRect(q(cx + Math.cos(a)*rr), q(cy + Math.sin(a)*rr*.3), 6, 6); } }
+  // the falls: more water coming down in front of the painted water, spray at the foot
+  for (const [a, b, y0, y1] of JG_FALLS){ const fx = sx(a); if (fx < -120 || fx > W + 40) continue; const w = b - a;
+    for (let i = 0; i < 11; i++){ const sp = 120 + (i*37) % 90, y = y0 + 6 + jgMod(t*sp + i*61, y1 - y0 - 18), x = fx + 6 + (i*41) % (w - 12); g.fillStyle = 'rgba(255,255,255,' + (.5 + .2*(i % 2)) + ')'; g.fillRect(q(x), q(y), 6, 18 + (i % 3)*6); }
+    for (let k = 0; k < 5; k++){ const u = jgMod(t*.8 + k*.2, 1); g.fillStyle = 'rgba(246,252,248,' + (.45*(1 - u)).toFixed(2) + ')'; g.fillRect(q(fx - 18 + k*14 - u*18), q(y1 - 6 - u*30), 36, 6); } }
+  // mist lying in the trees, drifting
+  for (let i = 0; i < 3; i++){ const y = 220 + i*190, off = ((t*(14 + i*9) + i*500) % (W + 700)) - 700, gr = g.createLinearGradient(0, y, 0, y + 110);
+    gr.addColorStop(0, 'rgba(214,236,206,0)'); gr.addColorStop(.5, 'rgba(214,236,206,' + (night ? .05 : .08) + ')'); gr.addColorStop(1, 'rgba(214,236,206,0)'); g.fillStyle = gr; g.fillRect(off, y, 700, 110); }
+  if (!night){ g.save(); g.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < 3; i++){ const x0b = 200 + i*520 + Math.sin(t*.3 + i)*30, f = .5 + .5*Math.sin(t*.5 + i*1.7), gr = g.createLinearGradient(x0b, 0, x0b + 220, 700);
+      gr.addColorStop(0, 'rgba(255,250,200,' + (.06 + f*.04).toFixed(3) + ')'); gr.addColorStop(1, 'rgba(255,250,200,0)'); g.fillStyle = gr; g.beginPath(); g.moveTo(x0b, 0); g.lineTo(x0b + 110, 0); g.lineTo(x0b + 420, 700); g.lineTo(x0b + 120, 700); g.closePath(); g.fill(); }
+    g.restore(); }
+  if (night){ g.save(); g.globalCompositeOperation = 'multiply'; g.fillStyle = '#31407a'; g.fillRect(0, 0, W, H); g.restore(); g.fillStyle = 'rgba(2,6,16,.38)'; g.fillRect(0, 0, W, H); }
+  // birds, butterflies, falling leaves and Midas, drawn on a small canvas and scaled up so they're as chunky as the art
+  if (!jgMid){ jgMid = document.createElement('canvas'); jgMid.width = 418; jgMid.height = 235; }
+  const m = jgMid.getContext('2d'); m.clearRect(0, 0, 418, 235); m.imageSmoothingEnabled = false;
+  if (!night){ for (let i = 0; i < 4; i++){ const dir = i % 2 ? -1 : 1, bx = dir > 0 ? jgMod(t*(30 + i*6) + i*140, 520) - 60 : 460 - jgMod(t*(26 + i*7) + i*120, 520), by = 22 + i*13 + Math.sin(t*1.8 + i)*4; if (i % 2) jgParrot(m, bx, by, t, i, dir < 0); else ecMacaw(m, bx, by, t, i, dir < 0); }
+    for (let i = 0; i < 3; i++){ const bx = jgMod(t*(14 + i*3) + i*150, 480) - 30, by = 160 + i*10 + Math.sin(t*2 + i*3)*8, f = Math.floor(t*12 + i) % 2; R2(m, bx, by, 1, 2, '#2a1a10'); R2(m, bx - 2, by - f, 2, 2, '#3a9ad8'); R2(m, bx + 1, by - f, 2, 2, '#3a9ad8'); R2(m, bx - 1, by - f, 1, 1, '#a8e0ff'); } }
+  for (let i = 0; i < 9; i++){ const lx = jgMod(ecR(i, 91)*418 - t*(8 + i % 4) + Math.sin(t + i)*6, 418), ly = jgMod(ecR(i, 92)*235 + t*(14 + i % 3*4), 235); R2(m, lx, ly, 2, 1, night ? '#3a5a3a' : ['#6aa83a', '#a8b83a', '#4a8a30'][i % 3]); R2(m, lx + 1, ly + 1, 1, 1, night ? '#2a4a2a' : '#2a6a24'); }
+  g.drawImage(jgMid, 0, 0, W, H);
+  if (!st.noMe) hcChar(g, 700, 812, {who: 'midas', walk: walk ? t*8 : null, map: st.mapOut, t, light: night ? HC_L_NIGHT : HC_L_DAY});   /*hc1*/
+  for (let i = 0; i < 30; i++){ const u = jgMod(t*.08 + ecR(i, 3)*3, 1), x = ecR(i, 4)*W + Math.sin(t*.7 + i)*30, y = 260 + ecR(i, 5)*520 + Math.sin(t*.9 + i*2)*24;
+    g.fillStyle = night ? 'rgba(200,255,120,' + (.9*Math.sin(u*Math.PI)).toFixed(2) + ')' : 'rgba(255,250,210,' + (.45*Math.sin(u*Math.PI)).toFixed(2) + ')'; const s = night ? 8 : 6; g.fillRect(Math.round(x/4)*4, Math.round(y/4)*4, s, s); }
+}
+eldPicAdd('bridge', ART[64]);   /*br2*/
+/*br2*/ /* THE ROPE BRIDGE: one picture of the gorge. The people stand where the deck of the picture is; everything that moves is drawn in the same chunky pixels. */
+const BR_DECK = [[585, 545], [700, 570], [820, 588], [950, 594], [1080, 584], [1200, 562], [1330, 532], [1450, 500], [1545, 472]];
+const brX = x => x <= 156 ? x*3.75 : x <= 420 ? 585 + (x - 156)/264*960 : 1545 + (x - 420)*1.9;
+function brDeck(X){ if (X <= BR_DECK[0][0]) return 536; const D = BR_DECK; for (let i = 1; i < D.length; i++) if (X <= D[i][0]){ const u = (X - D[i - 1][0])/(D[i][0] - D[i - 1][0]); return D[i - 1][1] + (D[i][1] - D[i - 1][1])*u; } return D[D.length - 1][1] - (X - D[D.length - 1][0])*.1; }
+const BR2_DECK = [[460, 470], [600, 520], [760, 566], [930, 596], [1090, 610], [1190, 612], [1300, 640], [1400, 690], [1650, 760]];
+const brX2 = x => x <= 156 ? 1190 + (156 - x)*2.9 : x <= 420 ? 1190 - (x - 156)/264*730 : 460 - (x - 420)*1.2;
+function brDeck2(X){ const D = BR2_DECK; if (X <= D[0][0]) return D[0][1] - (D[0][0] - X)*.3; for (let i = 1; i < D.length; i++) if (X <= D[i][0]){ const u = (X - D[i - 1][0])/(D[i][0] - D[i - 1][0]); return D[i - 1][1] + (D[i][1] - D[i - 1][1])*u; } return D[D.length - 1][1]; }
+const brK2 = X => X < 1190 ? .7 + Math.max(0, X - 380)/810*.45 : 1.15 + Math.min(1, (X - 1190)/450)*.12;
+let brMid = null;
+function sceneBridgePic(g, t, st){
+  const A2 = st.angle === 2 && ELD_PICS.bridge2 && ELD_PICS.bridge2.ok, P = A2 ? ELD_PICS.bridge2 : ELD_PICS.bridge, W = g.canvas.width, H = g.canvas.height;
+  g.imageSmoothingEnabled = false; g.drawImage(P.img, 0, 0, W, H);
+  const q = v => Math.round(v/6)*6;
+  // the river: white water running down the picture, and light on the rest of it
+  if (A2) for (let i = 0; i < 26; i++){ const u = jgMod(t*(.3 + (i % 4)*.07) + i*.173, 1), x = 560 + (i*89) % 420 - u*190, y = 640 + u*220; g.fillStyle = 'rgba(240,252,255,' + (.55*Math.sin(u*Math.PI)).toFixed(2) + ')'; g.fillRect(q(x), q(y), 18 + (i % 3)*12, 6); }
+  else for (let i = 0; i < 26; i++){ const u = jgMod(t*(.35 + (i % 4)*.08) + i*.173, 1), x = 780 + (i*97) % 520 + u*120, y = 650 + u*270; if (x > 1380) continue; g.fillStyle = 'rgba(240,252,255,' + (.55*Math.sin(u*Math.PI)).toFixed(2) + ')'; g.fillRect(q(x), q(y), 18 + (i % 3)*12, 6); }
+  for (let i = 0; i < 16; i++){ const x = 720 + (i*131) % 620, y = 560 + (i*47) % 90; g.fillStyle = 'rgba(210,236,236,' + (.12 + .1*Math.sin(t*1.4 + i)).toFixed(2) + ')'; g.fillRect(q(x), q(y), 30, 6); }
+  for (let i = 0; i < 3; i++){ const y = 300 + i*120, off = ((t*(10 + i*7) + i*500) % (W + 700)) - 700, gr = g.createLinearGradient(0, y, 0, y + 110); gr.addColorStop(0, 'rgba(214,236,206,0)'); gr.addColorStop(.5, 'rgba(214,236,206,.09)'); gr.addColorStop(1, 'rgba(214,236,206,0)'); g.fillStyle = gr; g.fillRect(off, y, 700, 110); }
+  // people, on a small canvas scaled up so they are as chunky as the picture
+  if (!brMid){ brMid = document.createElement('canvas'); brMid.width = 418; brMid.height = 235; }
+  const m = brMid.getContext('2d'); m.clearRect(0, 0, 418, 235); m.imageSmoothingEnabled = false;
+  const S = 4, L = 156, Rr = 420, K = 1.15, shake = st.bp ? Math.sin(t*1.3)*.8 : 0;
+  const bpE = st.bp ? eOnce(st, 'bp', t) : -1, bpTarget = (st.bpx != null ? st.bpx : 120)*3, bpGo = st.bp && bpE < 1.6 && bpTarget > 210;
+  const bpX = st.bp ? (bpGo ? Math.round(480 + (bpTarget - 480)*eEase(bpE/1.6)) : bpTarget) : -999;
+  const px = x => (A2 ? brX2(x) : brX(x))/S, py = x => ((A2 ? brDeck2(brX2(x)) : brDeck(brX(x))) + (x > L && x < Rr ? shake*S + (bpGo ? Math.sin(t*7)*S*.4 : 0) : 0))/S, kk = x => A2 ? brK2(brX2(x)) : 1;
+  const sz = k => k < .8 ? 2 : 3;   /*hc1*/
+  if (st.hide === 'ferns'){ const p = Math.sin(t*2) > .8 ? 1 : 0; R2(m, 86, 112 + p, 12, 5, '#d8a828'); R2(m, 88, 108 + p, 3, 4, '#d8a828'); R2(m, 93, 106 + p, 3, 5, '#d8a828'); R2(m, 88, 116 + p, 9, 4, '#e0aa66'); R2(m, 91, 117 + p, 1, 1, '#141010'); }
+  for (let i = 0; i < 4; i++){ const u = ((t*.3 + i/4) % 1); if (st.bp && bpE < 1.6) R2(m, 160 + i*60, py(L + 50 + i*60) + 4 + u*60, 1, 3, 'rgba(120,100,70,' + (1 - u) + ')'); }
+  const bpd = st.bp ? { x: px(bpX), y: bpX > L && bpX < Rr || A2 ? py(bpX) : 120, faceLeft: A2 ? false : (st.bpFace ? bpX > (st.mx || 30)*3 : true) } : null;
+  if (bpd && !bpGo) for (let s2 = 0; s2 < 4; s2++){ const u = ((t*.4 + s2/4) % 1); m.fillStyle = 'rgba(200,190,180,' + (.35*(1 - u)) + ')'; m.fillRect(Math.round(bpd.x + (bpd.faceLeft ? -22 : 18) + Math.sin(u*6 + s2)*3), Math.round(bpd.y - 36 - u*22), 3, 3); }
+  g.drawImage(brMid, 0, 0, W, H);
+  { /*hc1*/ const LB = HC_L_DAY;
+    if (st.hide === 'tree') hcChar(g, 240, 536, {who: 'midas', flip: 1, t, k: 3, light: LB});
+    else if (st.hide === 'under'){ const hx = 186, hy = py(hx)*S; hcChar(g, px(hx)*S, hy + 262, {who: 'midas', hang: 1, t, k: 3, light: LB}); }
+    else if (!st.gone && st.hide !== 'ferns'){ const mx = (st.mx != null ? st.mx : 30)*3, my = mx > L ? py(mx) : (A2 ? py(mx) : 134); hcChar(g, px(mx)*S, my*S, {who: 'midas', walk: st.walk ? t*8 : null, flip: A2 ? 1 : st.bp && bpX < mx ? 1 : 0, t, k: sz(kk(mx)), light: LB}); }
+    if (bpd) hcChar(g, bpd.x*S, bpd.y*S, {who: 'bp', walk: bpGo ? t*7 : null, flip: bpd.faceLeft ? 1 : 0, t, k: sz(kk(bpX)), light: LB}); }
+  for (let i = 0; i < 3; i++){ const dir = i % 2 ? -1 : 1, bx = dir > 0 ? jgMod(t*(30 + i*6) + i*140, 520) - 60 : 460 - jgMod(t*(26 + i*7) + i*120, 520), by = 12 + i*10 + Math.sin(t*1.8 + i)*4; const mm = brMid.getContext('2d'); }
+  for (let i = 0; i < 22; i++){ const u = jgMod(t*.08 + ecR(i, 3)*3, 1), x = ecR(i, 4)*W + Math.sin(t*.7 + i)*30, y = 260 + ecR(i, 5)*520 + Math.sin(t*.9 + i*2)*24; g.fillStyle = 'rgba(255,250,210,' + (.4*Math.sin(u*Math.PI)).toFixed(2) + ')'; g.fillRect(Math.round(x/4)*4, Math.round(y/4)*4, 6, 6); }
+  if (st.bp){ g.fillStyle = 'rgba(20,10,30,' + Math.min(.18, Math.max(0, bpE)*.12) + ')'; g.fillRect(0, 0, W, H); }
+}
+/*gtp1*/ /* THE SUN GATE, in your three pictures: 'gateA' the whole cliff (arriving, and looking up the statue), 'gateB' the doors close up (and opening), 'gateC' the colossus
+   standing down off its plinth. They are drawn as they are; what moves is the light on the gold, the sun's glow, the eyes, the dust and the leaves. */
+function gatePicKey(st){ const s = st.shot || 'approach', aw = st.awake || (st.wake && s !== 'eyes');
+  return s === 'doors' || s === 'open' ? 'gateB' : s === 'tilt' ? 'gateA' : s === 'approach' ? (aw ? 'gateC' : 'gateA') : 'gateC'; }
+let GC_OFF = null;
+function gSpark(g, x, y, a, s){ g.fillStyle = 'rgba(255,255,236,' + a.toFixed(2) + ')'; g.fillRect(x - s, y - 2, s*2 + 2, 4); g.fillRect(x - 2, y - s, 4, s*2 + 2); }
+function sceneGatePic(g, t, st){
+  const key = gatePicKey(st), P = ELD_PICS[key], W = g.canvas.width, H = g.canvas.height, shot = st.shot || 'approach', q = v => Math.round(v/4)*4, aw = !!(st.awake || (st.wake && shot !== 'eyes'));
+  const wakeE = st.wake && shot === 'eyes' && !st.awake ? eOnce(st, 'wake', t) : -1, openE = st.open ? eOnce(st, 'open', t) : -1;
+  const talk = st.talk ? Math.max(0, Math.sin(t*9))*(Math.sin(t*2.3) > -.3 ? 1 : 0) : 0;
+  const shk = (shot === 'wake' && t > .3 && t < 2.2 && Math.sin(t*7) > .5) || (wakeE >= 0 && wakeE < 1.2) || (shot === 'kneel' && !st.talk && t < .8) ? 1 : 0, jx = shk ? Math.round((Math.random() - .5)*4)*2 : 0, jy = shk ? Math.round((Math.random() - .5)*4)*2 : 0;
+  g.imageSmoothingEnabled = false; g.fillStyle = '#000'; g.fillRect(0, 0, W, H);
+  if (key === 'gateA'){
+    if (shot === 'tilt'){ const k = Math.min(1, t/5), e = k*k*(3 - 2*k), sy = Math.round((420 - e*160)/2)*2;
+      if (!GC_OFF){ GC_OFF = document.createElement('canvas'); } if (GC_OFF.width !== W || GC_OFF.height !== H){ GC_OFF.width = W; GC_OFF.height = H; }
+      const og = GC_OFF.getContext('2d'); og.imageSmoothingEnabled = false; picDraw(og, P.img, W, H, t, [[20, 230, 10, .35, 0], [780, 941, 8, 1.2, 2]]);
+      g.drawImage(GC_OFF, 836, sy, 836, 470, 0, 0, W, H); }
+    else picDraw(g, P.img, W, H, t, [[20, 230, 10, .35, 0], [780, 941, 8, 1.2, 2]]);
+    const tl = shot === 'tilt';
+    for (let i = 0; i < 9; i++){ const a = Math.sin(t*2.2 + i*2.3); if (a < .55) continue; const pos = [[740, 460], [840, 600], [930, 420], [905, 690], [1190, 400], [1240, 540], [1290, 420], [1200, 640], [800, 380]][i];
+      if (tl) gSpark(g, (pos[0] - 836)*2, (pos[1] - 420)*2, .9*a, 10); else gSpark(g, pos[0], pos[1], .9*a, 6); }
+    if (!st.noMe && shot === 'approach'){ const mx = Math.min(560, 160 + t*70); hcChar(g, mx, 862, {who: 'midas', walk: mx < 560 ? t*8 : null, t, k: 3}); }
+    for (let i = 0; i < 4; i++){ const bx = jgMod(t*(26 + i*7) + i*400, W + 100) - 50, by = 140 + i*38 + Math.sin(t*1.8 + i)*5, f = Math.sin(t*10 + i*2) > 0 ? 3 : -3; g.fillStyle = 'rgba(30,40,50,.85)'; g.fillRect(q(bx - 8), q(by + f), 4, 4); g.fillRect(q(bx - 4), q(by), 4, 4); g.fillRect(q(bx), q(by), 4, 4); g.fillRect(q(bx + 4), q(by + f), 4, 4); }
+    return; }
+  if (key === 'gateB'){
+    g.drawImage(P.img, 0, 0, W, H);
+    const op = openE < 0 ? 0 : Math.min(1, openE/2.6), e = op*op*(3 - 2*op), DX = 622, DW = 676, DY = 116, DH = 713;
+    if (op > 0){ const gr = g.createLinearGradient(0, DY, 0, DY + DH); gr.addColorStop(0, '#fffbe0'); gr.addColorStop(1, '#ffe08a'); g.fillStyle = gr; g.fillRect(DX, DY, DW, DH);
+      for (let k = 0; k < 7; k++){ g.fillStyle = 'rgba(255,255,255,' + (.18 + .08*Math.sin(t*3 + k)).toFixed(2) + ')'; g.fillRect(DX + 40 + k*90, DY, 30, DH); }
+      g.save(); g.beginPath(); g.rect(DX, DY, DW, DH); g.clip(); g.drawImage(P.img, DX, DY, 338, DH, Math.round(DX - e*342), DY, 338, DH); g.drawImage(P.img, DX + 338, DY, 338, DH, Math.round(DX + 338 + e*342), DY, 338, DH); g.restore();
+      g.fillStyle = 'rgba(255,236,160,' + (e*.22).toFixed(3) + ')'; g.fillRect(0, 0, W, H);
+      for (let i = 0; i < 30; i++){ const u = jgMod(t*.3 + ecR(i, 3)*3, 1), x = DX + 30 + ecR(i, 4)*(DW - 60), y = DY + DH - u*DH; g.fillStyle = 'rgba(255,255,230,' + (e*.9*Math.sin(u*Math.PI)).toFixed(2) + ')'; g.fillRect(q(x), q(y), 6, 6); } return; }
+    g.save(); g.beginPath(); g.rect(DX, DY, DW, DH); g.clip(); const sw = ((t*.28) % 1.5)*(DW + 500) - 300; g.fillStyle = 'rgba(255,250,214,.26)'; g.beginPath(); g.moveTo(DX + sw, DY); g.lineTo(DX + sw + 70, DY); g.lineTo(DX + sw - 120, DY + DH); g.lineTo(DX + sw - 190, DY + DH); g.closePath(); g.fill(); g.restore();
+    { const p = .5 + .5*Math.sin(t*1.6); g.fillStyle = 'rgba(255,246,170,' + (.06 + .06*p).toFixed(3) + ')'; for (const r of [150, 110, 70]){ g.fillRect(955 - r, 440 - r*.35, r*2, r*.7); g.fillRect(955 - r*.7, 440 - r, r*1.4, r*2); } }
+    for (let i = 0; i < 8; i++){ const a = Math.sin(t*2.6 + i*1.9); if (a > .6) gSpark(g, [660, 740, 822, 905, 1005, 1085, 1165, 1248][i], [182, 275, 370, 463, 557, 655, 750, 182][(i*3) % 8], .9*a, 8); }
+    for (let i = 0; i < 22; i++){ const u = jgMod(t*.2 + ecR(i, 3)*3, 1), x = DX + ecR(i, 4)*DW, y = DY + DH - u*DH; g.fillStyle = 'rgba(255,240,190,' + (.55*Math.sin(u*Math.PI)).toFixed(2) + ')'; g.fillRect(q(x), q(y), 6, 6); }
+    return; }
+  // gateC: the colossus
+  if (!GC_OFF){ GC_OFF = document.createElement('canvas'); } if (GC_OFF.width !== W || GC_OFF.height !== H){ GC_OFF.width = W; GC_OFF.height = H; }
+  const og = GC_OFF.getContext('2d'); og.imageSmoothingEnabled = false; og.clearRect(0, 0, W, H);
+  picDraw(og, P.img, W, H, t, [[20, 130, 10, .35, 0], [745, 830, 4, 1.2, 2]]);
+  const bow = st.kneel ? (shot === 'kneel' && !st.talk ? Math.min(1, t/.8)**2 : 1) : 0, BY = Math.round(bow*36/4)*4;
+  if (BY){ og.drawImage(P.img, 1440, 215, 285, 60, 1130, 215, 285, 60); og.drawImage(P.img, 1440, 275, 285, 270, 1130, 275, 285, 270);
+    og.drawImage(P.img, 1130, 215, 295, 320, 1130, 215 + BY, 295, 320); og.drawImage(P.img, 1130, 535, 295, 200, 1130, 535 + BY, 295, 200 - BY); og.drawImage(P.img, 1130, 735 - BY, 295, BY, 1130, 735, 295, BY); }
+  const open = wakeE < 0 ? (aw || shot !== 'eyes' ? 1 : 0) : Math.min(1, wakeE/.5), EY = BY, eyes = [[1241, 320 + EY, 19, 9], [1296, 319 + EY, 19, 9]];
+  if (open < 1){ og.fillStyle = '#c29a1c'; for (const [x, y, w, h] of eyes){ og.fillRect(x, y, w, h); og.fillStyle = '#7a5a10'; og.fillRect(x, y + 4, w, 2); og.fillStyle = '#c29a1c'; } }
+  const glow = (aw || wakeE >= 0) ? (wakeE >= 0 ? Math.min(1, wakeE/.6) : 1) : 0;
+  if (glow > 0){ const p = .5 + .5*Math.sin(t*6); for (const [x, y, w, h] of eyes){ og.fillStyle = 'rgba(255,244,170,' + ((.12 + .08*p)*glow).toFixed(3) + ')'; for (let r = 8; r < 52; r += 8) og.fillRect(x - r + w/2, y - r/2 + h/2, r*2, r); og.fillStyle = '#fffce8'; og.fillRect(x + 3, y + 2, w - 6, h - 5); }
+    og.fillStyle = 'rgba(255,240,160,' + ((.1 + .08*p)*glow).toFixed(3) + ')'; for (const r of [44, 30, 16]) og.fillRect(1230 - r, 432 + BY - r, r*2, r*2); }
+  if (talk > .05){ og.fillStyle = '#5a3a08'; og.fillRect(1259, 357 + BY, 44, 5 + Math.round(talk*8)); og.fillStyle = '#c29a1c'; og.fillRect(1259, 357 + BY, 44, 2); }
+  if (shot === 'wake' || wakeE >= 0){ const k = shot === 'wake' ? Math.min(1, t/1.6) : 1; for (let i = 0; i < 26; i++){ const u = jgMod(t*(.6 + ecR(i, 5)*.5) + ecR(i, 3), 1), x = 100 + ecR(i, 4)*1700, sz = 8 + (i % 3)*4; og.fillStyle = i % 3 ? '#6a5a44' : '#8a7a5a'; og.fillRect(q(x), q(u*700), sz, sz); }
+    if (shot === 'wake'){ for (let i = 0; i < 18; i++){ const u = Math.min(1, t/1.6 - ecR(i, 6)*.3), x = 1130 + ecR(i, 7)*300 + (u*60)*(i % 2 ? 1 : -1), y = 735 - Math.sin(Math.max(0, u)*Math.PI)*40*ecR(i, 8); og.fillStyle = 'rgba(214,190,150,' + (.7*(1 - Math.max(0, u))).toFixed(2) + ')'; og.fillRect(q(x), q(y), 12, 8); } } }
+  if (shot === 'kneel' && bow >= .3){ const u = st.talk ? 1 : Math.min(1, (t - .3)/1.2); for (let i = 0; i < 22; i++){ const a = i/22*Math.PI, d = u*260*(i % 2 ? 1 : -1); og.fillStyle = 'rgba(214,190,150,' + (.8*(1 - u)).toFixed(2) + ')'; og.fillRect(q(1275 + Math.cos(a)*d), q(738 - Math.sin(a)*u*50), 12, 8); } }
+  for (let i = 0; i < 20; i++){ const u = jgMod(t*.18 + ecR(i, 3)*3, 1), x = 1090 + ecR(i, 4)*400, y = 700 - u*480; og.fillStyle = 'rgba(255,238,160,' + (.6*Math.sin(u*Math.PI)).toFixed(2) + ')'; og.fillRect(q(x), q(y), 6, 6); }
+  for (let i = 0; i < 6; i++){ const a = Math.sin(t*2.4 + i*2.1); if (a > .6) gSpark(og, [740, 905, 800, 1190, 1250, 1210][i], [440, 560, 640, 470, 560, 640][i], .9*a, 6); }
+  if (!st.noMe && (shot === 'over' || shot === 'kneel' || (shot === 'approach' && aw))) hcChar(og, shot === 'over' ? 300 : 360, 810, {who: 'midas', t, k: 3});
+  if (shot === 'eyes'){ const z = 1 + Math.min(1, t/5)*0; g.drawImage(GC_OFF, 810 + jx, 140 + jy, 947, 415, 0, 0, W, H); }
+  else g.drawImage(GC_OFF, jx, jy);
+  if (wakeE >= 0 && wakeE < .7 && Math.floor(t*14) % 2){ g.fillStyle = 'rgba(255,240,180,.22)'; g.fillRect(0, 0, W, H); }
+}
+/*act1*/ /* THE ALTAR AWAKE, in your picture; and the wind that moves every picture's leaves. */
+function picDraw(g, img, W, H, t, bands, jx, jy, sx0, sw){
+  jx = jx || 0; jy = jy || 0; const SW = sw || img.width;
+  if (sx0 == null){ g.drawImage(img, jx, jy, W, H); } else { const PW = img.width, x0 = Math.floor(sx0), w1 = Math.min(W, PW - x0); g.drawImage(img, x0, 0, w1, H, 0, 0, w1, H); if (w1 < W) g.drawImage(img, 0, 0, W - w1, H, w1, 0, W - w1, H); }
+  for (let y = 0; y < H; y += 4){ let o = 0; for (const [a, b, amp, sp, ph] of bands){ if (y >= a && y < b){ const env = Math.sin(Math.PI*(y - a + 2)/(b - a)); o += amp*Math.sqrt(env)*Math.sin(t*sp + y*.011 + (ph || 0)); } }
+    o = Math.round(o/4)*4; if (!o) continue;
+    if (sx0 == null){ g.drawImage(img, 0, y, SW, 4, jx + o, jy + y, W, 4); }
+    else { const PW = img.width, X = jgMod(Math.floor(sx0) - o, PW), w1 = Math.min(W, PW - X); g.drawImage(img, X, y, w1, 4, 0, y, w1, 4); if (w1 < W) g.drawImage(img, 0, y, W - w1, 4, w1, y, W - w1, 4); } }
+}
+let STA_M = null;
+function sceneStonesAct(g, t, st){
+  const P = ELD_PICS.stones3, W = g.canvas.width, H = g.canvas.height, q = v => Math.round(v/4)*4;
+  g.imageSmoothingEnabled = false; g.fillStyle = '#0c0814'; g.fillRect(0, 0, W, H);
+  picDraw(g, P.img, W, H, t, [[0, 300, 9, .5, 0], [400, 520, 3, 1.1, 1], [748, 827, 5, 1.3, 2]]);
+  if (!STA_M){ const c = document.createElement('canvas'); c.width = P.img.width; c.height = P.img.height; const x = c.getContext('2d'); x.drawImage(P.img, 0, 0); STA_M = [];
+    for (const [rx, ry, rw, rh] of [[785, 525, 360, 185], [1685, 325, 60, 45]]){ const d = x.getImageData(rx, ry, rw, rh).data; for (let j = 0; j < rh; j++) for (let i = 0; i < rw; i++){ const k = (j*rw + i)*4; if (d[k] > 200 && d[k + 1] > 150 && d[k + 2] < 170) STA_M.push([rx + i, ry + j]); } } }
+  for (const [x, y] of STA_M){ const a = .22 + .22*Math.sin(t*5 + x/70 + y/90); g.fillStyle = 'rgba(255,252,210,' + a.toFixed(2) + ')'; g.fillRect(x, y, 1, 1); }
+  const x0 = 1004, y0 = 455, x1 = 1775, y1 = 278, n = Math.hypot(x1 - x0, y1 - y0);
+  for (let k = 0; k < 9; k++){ const u = jgMod(t*.55 + k/9, 1), x = q(x0 + (x1 - x0)*u), y = q(y0 + (y1 - y0)*u); g.fillStyle = 'rgba(255,255,236,.85)'; g.fillRect(x - 4, y - 4, 12, 8); g.fillStyle = 'rgba(255,230,140,.4)'; g.fillRect(x - 12, y - 6, 28, 12); }
+  { const p = .5 + .5*Math.sin(t*6); g.fillStyle = 'rgba(255,240,170,' + (.5 + .3*p).toFixed(2) + ')'; g.fillRect(x1 - 6, y1 - 40 - p*8, 12, 80 + p*16); g.fillRect(x1 - 40 - p*8, y1 - 6, 80 + p*16, 12); }                // the flare where it lands
+  for (let i = 0; i < 26; i++){ const u = jgMod(t*.32 + ecR(i, 3)*3, 1), x = 940 + ecR(i, 4)*110 + Math.sin(t*1.3 + i)*14, y = 470 - u*210; g.fillStyle = 'rgba(255,226,120,' + (.9*Math.sin(u*Math.PI)).toFixed(2) + ')'; g.fillRect(q(x), q(y), 4 + (i % 3)*2, 4 + (i % 3)*2); }   // sparks off the cat
+  for (let i = 0; i < 22; i++){ const u = jgMod(t*.08 + ecR(i, 6)*3, 1), x = ecR(i, 7)*W + Math.sin(t*.7 + i)*26, y = 470 + ecR(i, 8)*340 + Math.sin(t*.9 + i*2)*20; g.fillStyle = 'rgba(255,232,150,' + (.5*Math.sin(u*Math.PI)).toFixed(2) + ')'; g.fillRect(q(x), q(y), 6, 6); }
+  for (let i = 0; i < 40; i++){ const x = ecR(i, 11)*W, y = ecR(i, 12)*H*.28; if (Math.sin(t*2 + i*1.9) > .6){ g.fillStyle = 'rgba(255,255,255,.8)'; g.fillRect(q(x), q(y), 4, 4); } }
+}
+/*stp1*/ /* THE RING OF STONES, in your two pictures. 'stones2' (the high one) is where you arrive; 'stones1' (the low one, right at the altar) is where the cat goes in. The glyphs are your own
+   carved ones, found in the picture and lit gold; the cat is the game's stone cat, set into the hollow, turning, and looking where the light goes. */
+let STP_M = null, STP_CAT = null;
+function stpMasks(){
+  if (STP_M) return STP_M; const P = ELD_PICS.stones1, c = document.createElement('canvas'); c.width = P.img.width; c.height = P.img.height; const x = c.getContext('2d'); x.drawImage(P.img, 0, 0);
+  const grab = (rx, ry, rw, rh, lim, fn) => { const d = x.getImageData(rx, ry, rw, rh).data, out = [], ls = []; for (let k = 0; k < d.length; k += 4) ls.push(.3*d[k] + .59*d[k + 1] + .11*d[k + 2]); const med = ls.slice().sort((p, q) => p - q)[ls.length >> 1], cut = Math.min(lim, med*.68); for (let j = 0; j < rh; j++) for (let i = 0; i < rw; i++) if (ls[j*rw + i] < cut) out.push([rx + i, ry + j, fn(rx + i, ry + j)]); return out; };
+  STP_M = {glyphs: grab(790, 586, 324, 136, 42, (a, b) => Math.max(0, Math.min(6, Math.floor((a - 786)/50))) + 7*Math.max(0, Math.min(2, Math.floor((b - 585)/46)))),
+    slots: grab(994, 556, 144, 16, 46, (a, b) => Math.max(0, Math.min(5, Math.floor((a - 992)/24)))),
+    pillars: [[196, 348, 56, 46], [470, 368, 50, 46], [1396, 362, 56, 46], [1676, 352, 56, 50], [1826, 396, 56, 46]].flatMap(r => grab(r[0], r[1], r[2], r[3], 70, () => 0))};
+  return STP_M;
+}
+function sceneStonesPic(g, t, st){
+  if (st.angle === 3) return sceneStonesAct(g, t, st);   /*act1*/
+  const W = g.canvas.width, H = g.canvas.height, a1 = st.angle === 1, P = ELD_PICS[a1 ? 'stones1' : 'stones2'], q = v => Math.round(v/4)*4;
+  const catE = eOnce(st, 'cat', t), spinE = eOnce(st, 'spin', t), ptE = eOnce(st, 'point', t), lit = spinE < 0 ? 0 : Math.min(1, spinE/2.2), beamOn = ptE >= .6;
+  const shk = spinE >= 1 && spinE < 2.4 ? 3 : 0, jx = shk ? Math.round((Math.random() - .5)*shk*2) : 0, jy = shk ? Math.round((Math.random() - .5)*shk*2) : 0;
+  g.imageSmoothingEnabled = false; g.fillStyle = '#0c0814'; g.fillRect(0, 0, W, H); picDraw(g, P.img, W, H, t, a1 ? [[0, 330, 10, .45, 0], [415, 505, 3, 1.1, 1], [748, 828, 5, 1.3, 2]] : [[0, 110, 6, .5, 0], [760, 941, 6, 1.2, 2]], jx, jy);   /*act1*/
+  if (a1){
+    const M = stpMasks(); g.save(); g.translate(jx, jy);
+    if (lit > 0) for (const [x, y, idx] of M.glyphs){ if (lit > (idx + 1)/22){ g.fillStyle = (Math.sin(t*6 + idx) > 0 || lit >= 1) ? '#ffe680' : '#e8b830'; g.fillRect(x, y, 1, 1); } }
+    if (ptE >= 0) for (const [x, y, idx] of M.slots){ if (ptE > idx*.09){ g.fillStyle = '#fff0a0'; g.fillRect(x, y, 1, 1); } }
+    if (beamOn) for (const [x, y] of M.pillars){ g.fillStyle = '#ffe680'; g.fillRect(x, y, 1, 1); }
+    if (catE >= 0){
+      if (!STP_CAT){ STP_CAT = document.createElement('canvas'); STP_CAT.width = 40; STP_CAT.height = 44; }
+      const place = Math.min(1, catE/1.1), AX = 958, AY = 554, k = 4;
+      let cx = 690, cy = 604, view = 0, eyes = 0;
+      if (place >= .35){ const u = eEase(Math.min(1, (place - .35)/.4)); cx = 690 + (AX - 690)*u; cy = 604 + (AY - 604)*u - Math.sin(u*Math.PI)*90; }
+      if (spinE >= 0){ const tt = Math.min(spinE, 2.8), om = tt < 1.4 ? tt/1.4*16 : tt < 2.2 ? 16 : 16*(1 - (tt - 2.2)/.6), ang = tt < 1.4 ? 16*tt*tt/2.8 : tt < 2.2 ? 9.8 + 16*(tt - 1.4) : 22.6 + 16*(tt - 2.2) - 16*(tt - 2.2)*(tt - 2.2)/1.2;
+        view = spinE >= 2.8 ? 1 : ((Math.floor(ang/(Math.PI/2)) % 4) + 4) % 4; eyes = lit; cx = AX; cy = AY; if (om > 6) cx += Math.floor(t*48) % 2 ? 3 : -3;
+        for (let i = 0; i < 10; i++){ const aa = i/10*Math.PI*2 + ang, r = 40 + (i % 3)*6; if (om > 4){ g.fillStyle = i % 2 ? '#c8b080' : '#ffe680'; g.fillRect(q(AX + Math.cos(aa)*r*1.5), q(AY - 6 + Math.sin(aa)*r*.3), 6, 6); } } }
+      const cg = STP_CAT.getContext('2d'); cg.clearRect(0, 0, 40, 44); cg.imageSmoothingEnabled = false; stoneCat32(cg, 20, 40, view, eyes); if (eyes < .5){ cg.globalCompositeOperation = 'source-atop'; cg.fillStyle = 'rgba(46,24,70,.38)'; cg.fillRect(0, 0, 40, 44); cg.globalCompositeOperation = 'source-over'; }
+      g.drawImage(STP_CAT, 0, 0, 40, 44, Math.round(cx - 20*k), Math.round(cy - 40*k), 40*k, 44*k);
+      if (spinE >= 0){ const gl = .3 + .2*Math.sin(t*8); g.fillStyle = 'rgba(255,224,120,' + (gl*lit).toFixed(2) + ')'; g.fillRect(AX - 52, AY - 10, 104, 8); g.fillRect(AX - 28, AY - 40, 56, 30); }
+      if (beamOn){ const kb = Math.min(1, (ptE - .6)/.6), x0 = AX + 12, y0 = AY - 14*k + 10, x1 = 1668, y1 = 318, n = Math.hypot(x1 - x0, y1 - y0), steps = Math.round(n/6*kb);
+        for (let s = 0; s < steps; s++){ const u = s*6/n, x = q(x0 + (x1 - x0)*u), y = q(y0 + (y1 - y0)*u); g.fillStyle = s % 3 ? '#fff0a0' : '#ffffff'; g.fillRect(x, y, 6, 6); g.fillStyle = 'rgba(255,200,80,.45)'; g.fillRect(x, y + 6, 6, 6); g.fillRect(x, y - 6, 6, 6); }
+        if (kb >= 1){ const p = Math.sin(t*6) > 0; g.fillStyle = p ? '#ffffff' : '#fff0a0'; for (const [dx, dy, w, h] of [[-12, -12, 24, 24], [-36, -3, 72, 6], [-3, -36, 6, 72]]) g.fillRect(x1 + dx, y1 + dy, w, h); } }
+    }
+    g.restore();
+    if (spinE >= 2.75 && spinE < 3.0){ g.fillStyle = 'rgba(255,240,190,' + (.5*(1 - (spinE - 2.75)/.25)).toFixed(2) + ')'; g.fillRect(0, 0, W, H); }
+    if (lit > 0){ g.fillStyle = 'rgba(255,180,60,' + (.05*lit).toFixed(3) + ')'; g.fillRect(0, 0, W, H); }
+  } else {
+    if (st.smoke){ for (let i = 0; i < 9; i++){ const u = ((t*.16 + i/9) % 1); g.fillStyle = 'rgba(214,204,200,' + (.55*(1 - u)).toFixed(2) + ')'; g.fillRect(q(1226 + Math.sin(u*6 + i)*8), q(210 - u*110), 8, 8); } g.fillStyle = '#ff8a40'; g.fillRect(1224, 214, 8, 4); g.fillStyle = '#ffd060'; g.fillRect(1228, 210, 4, 4); }
+    for (let i = 0; i < 24; i++){ const u = jgMod(t*.07 + ecR(i, 3)*3, 1), x = ecR(i, 4)*W + Math.sin(t*.7 + i)*30, y = 420 + ecR(i, 5)*480 + Math.sin(t*.9 + i*2)*24; g.fillStyle = 'rgba(255,232,150,' + (.55*Math.sin(u*Math.PI)).toFixed(2) + ')'; g.fillRect(q(x), q(y), 6, 6); }   // fireflies
+  }
+  for (let i = 0; i < 40; i++){ const x = ecR(i, 11)*W, y = ecR(i, 12)*H*.22; if (Math.sin(t*2 + i*1.9) > .55){ g.fillStyle = 'rgba(255,255,255,.8)'; g.fillRect(q(x), q(y), 4, 4); } }                           // the stars
+}
+/*vl1*/ /* THE VIEW FROM THE TOP OF THE CLIFF, after the eagle: the river, the green hills, and the standing stones with the gold on top. Your picture, as it is;
+   the only things added are a little light on the gold and on the river, a few birds a long way off, and drifting mist. */
+function sceneValley(g, t, st){
+  const P = ELD_PICS.valley, W = g.canvas.width, H = g.canvas.height;
+  g.imageSmoothingEnabled = false; picDraw(g, P.img, W, H, t, [[0, 200, 14, .35, 0], [330, 600, 3, 1.1, 1], [745, 832, 5, 1.3, 2]]);   /*act1*/
+  const q = v => Math.round(v/4)*4;
+  for (let i = 0; i < 22; i++){ const u = jgMod(t*(.14 + (i % 4)*.03) + i*.137, 1), x = 640 + (i*37) % 190 + Math.sin(u*6.28 + i)*10 - u*40*0, y = 380 + u*330, a = .5*Math.sin(u*Math.PI)*(.5 + .5*Math.sin(t*3 + i*1.7)); if (a < .08) continue;
+    g.fillStyle = 'rgba(245,252,255,' + a.toFixed(2) + ')'; g.fillRect(q(x - (y - 380)*.18), q(y), 8 + (i % 3)*4, 4); }                       // light on the river
+  { const a = .55 + .45*Math.sin(t*3.2); g.fillStyle = 'rgba(255,236,150,' + a.toFixed(2) + ')'; g.fillRect(1368, 268, 8, 8); g.fillStyle = 'rgba(255,250,210,' + (a*.7).toFixed(2) + ')'; g.fillRect(1372 - 8, 272, 24, 4); g.fillRect(1368, 260, 4, 24); }   // the gold on the stones
+  for (let i = 0; i < 5; i++){ const u = jgMod(t*(.02 + i*.004) + i*.21, 1), x = -40 + u*(W + 80), y = 190 + i*28 + Math.sin(t*1.3 + i*2)*6, f = Math.sin(t*(9 + i) + i*3) > 0 ? 2 : -2;
+    g.fillStyle = 'rgba(20,40,30,.75)'; g.fillRect(q(x - 6), q(y + f), 4, 4); g.fillRect(q(x - 2), q(y), 4, 4); g.fillRect(q(x + 2), q(y + f), 4, 4); }                // birds, a long way off
+  for (let i = 0; i < 3; i++){ const y = 330 + i*90, off = ((t*(8 + i*5) + i*600) % (W + 800)) - 800, gr = g.createLinearGradient(0, y, 0, y + 120); gr.addColorStop(0, 'rgba(226,240,236,0)'); gr.addColorStop(.5, 'rgba(226,240,236,.10)'); gr.addColorStop(1, 'rgba(226,240,236,0)'); g.fillStyle = gr; g.fillRect(off, y, 800, 120); }
+}
+eldPicAdd('bridge2', ART[65]);   /*br3*/
+eldPicAdd('stones1', ART[66]); ELD_PICS.stones1.dim = [1900, 828];   /*stp1*/
+eldPicAdd('stones2', ART[67]); ELD_PICS.stones2.dim = [1671, 941];   /*stp1*/
+eldPicAdd('stones3', ART[68]); ELD_PICS.stones3.dim = [1902, 827];   /*act1*/
+eldPicAdd('gateA', ART[69]); ELD_PICS.gateA.dim = [1672, 941];   /*gtp1*/
+eldPicAdd('gateB', ART[70]); ELD_PICS.gateB.dim = [1897, 829];   /*gtp1*/
+eldPicAdd('gateC', ART[71]); ELD_PICS.gateC.dim = [1894, 830];   /*gtp1*/
+eldPicAdd('valley', ART[72]); ELD_PICS.valley.dim = [1891, 832];   /*vl1*/
 function eldPicKey(name, st){
+  if (name === 'gate32'){ const k = gatePicKey(st || {}); return ELD_PICS[k] && ELD_PICS[k].ok ? k : null; }   /*gtp1*/
+  if (name === 'stones32'){ const k = st && st.angle === 3 ? 'stones3' : st && st.angle === 1 ? 'stones1' : 'stones2'; return ELD_PICS[k] && ELD_PICS[k].ok ? k : null; }   /*stp1*/
+  if (name === 'nest32' && st && st.shot === 'valley') return ELD_PICS.valley && ELD_PICS.valley.ok ? 'valley' : null;   /*vl1*/
+  if (name === 'bridge32') return ELD_PICS.bridge && ELD_PICS.bridge.ok ? 'bridge' : null;   /*br2*/
+  if (name === 'jungle32') return ELD_PICS.jungle && ELD_PICS.jungle.ok ? 'jungle' : null;   /*jgp2*/
   if (name === 'final48' && st){ const fk = st.shot === 'rim' ? 'rim' : st.shot === 'steps' ? 'steps' : (['top', 'edge', 'thrown', 'sunfall', 'gem', 'reach', 'sunwarm', 'king', 'morph'].includes(st.shot)) ? 'edge' : null; return fk && ELD_PICS[fk] && ELD_PICS[fk].ok ? fk : null; }   /*eldrim*/
   if (name === 'inv' && st){ const pk = st.pic === 'gate' ? 'gate' : 'elite:' + (st.pic || 'treasurer'); return ELD_PICS[pk] && ELD_PICS[pk].ok ? pk : null; }   /*invpic*/
   if (name === 'goldstreet' || name === 'gate48') return ELD_PICS['gate'] && ELD_PICS['gate'].ok ? 'gate' : null;   /*eldgate*/
@@ -33833,26 +34161,26 @@ function eldScene(g, name, t, st){
     case 'landing32': return sceneLanding32(gg, t, st);
     case 'street32': return sceneStreet32(gg, t, st);
     case 'home32': return sceneHome32(gg, t, st);
-    case 'stones32': return sceneStones32(gg, t, st);
+    case 'stones32': return eldPicKey(name, st) ? sceneStonesPic(gg, t, st) : sceneStones32(gg, t, st);   /*stp1*/
     case 'river32': return sceneRiver32(gg, t, st);
     case 'shelter32': return sceneShelter32(gg, t, st);
     case 'dock32': return sceneDock32(gg, t, st);
     case 'dock48': return sceneDock48(gg, t, st);
     case 'fly48': return sceneFly48(gg, t, st);
     case 'final48': { const pk = eldPicKey(name, st); return pk ? sceneEldPic(gg, t, st, pk) : sceneFinal48(gg, t, st); }   /*eldrim2*/
-    case 'jungle32': return sceneJungle48(gg, t, st);
-    case 'bridge32': return sceneBridge48(gg, t, st);
+    case 'jungle32': return eldPicKey(name, st) ? sceneJunglePano(gg, t, st) : sceneJungle48(gg, t, st);   /*jgp2*/
+    case 'bridge32': return eldPicKey(name, st) ? sceneBridgePic(gg, t, st) : sceneBridge48(gg, t, st);   /*br2*/
     case 'blackwater32': return sceneBlackwater32(gg, t, st);
     case 'bpcamp32': return sceneBPCamp32(gg, t, st);
     case 'city32': return sceneCity48(gg, t, st);
     case 'gstreet32': return sceneGStreet48(gg, t, st);
     case 'plaza32': return scenePlaza32x(gg, t, st);
     case 'chart32': return sceneChart32(gg, t, st);
-    case 'gate32': return sceneGate32(gg, t, st);
+    case 'gate32': return eldPicKey(name, st) ? sceneGatePic(gg, t, st) : sceneGate32(gg, t, st);   /*gtp1*/
     case 'maze32': return sceneMaze32(gg, t, st);
     case 'cliff32': return sceneCliff48(gg, t, st);
     case 'yarahouse': return sceneYara48(gg, t, st);
-    case 'nest32': return sceneNest32(gg, t, st);
+    case 'nest32': return eldPicKey(name, st) ? sceneValley(gg, t, st) : sceneNest32(gg, t, st);   /*vl1*/
     case 'street': return sceneStreet(gg, t, st);
     case 'airstrip': return sceneAirstrip(gg, t, st);
     case 'village': return sceneVillage(gg, t, st);
@@ -33945,7 +34273,7 @@ function eldVillage(seed){
 }
 /* ---- sounds ---- */
 /*v7snd2*/ /* sound files for the cutscenes. They play through the same audio engine as everything else (so they work anywhere the game's own sounds do), and fall back to a plain audio tag. A missing file is just silence. */
-const ELD_AUDIO = {samba: 'audio/samba.mp3', city: 'audio/el-dorado-city.mp3', rain: 'audio/heavy-rain.mp3', fly: 'audio/flight-plane.mp3', plane: 'audio/plane-landing.mp3', fw1: 'audio/firework1.mp3', fw2: 'audio/firework2.mp3', fw3: 'audio/firework3.mp3', tenseA: 'audio/tense-suspension.mp3', tenseB: 'audio/tense-suspension.mp3', jw: 'audio/jungle-walk.mp3', my: 'audio/murder-mystery.mp3', vic: 'audio/el-dorado-victory.mp3'};
+const ELD_AUDIO = {samba: 'audio/samba.mp3', city: 'audio/el-dorado-city.mp3', rain: 'audio/heavy-rain.mp3', fly: 'audio/flight-plane.mp3', plane: 'audio/plane-landing.mp3', fw1: 'audio/firework1.mp3', fw2: 'audio/firework2.mp3', fw3: 'audio/firework3.mp3', tenseA: 'audio/tense-suspension.mp3', tenseB: 'audio/tense-suspension.mp3', jw: 'audio/jungle-walk.mp3', my: 'audio/murder-mystery.mp3', vic: 'audio/el-dorado-victory.mp3', gun: 'audio/gunshot.mp3', birds: 'audio/bird-chirping.mp3'};   /*snd9*/
 const EA = {loops: {}, once: [], fired: new Set(), wasOn: false, fw: false, hold: false, bufs: {}};
 function eldAudioOk(){ return A.started && A.on && A.ctx; }
 function eldBuf(id){
@@ -34000,6 +34328,7 @@ function eldSceneAudio(scene, st){                /*v7mus6*/ // which cutscene i
   if (EA.loops.vic) return;                       // the victory song, once it starts, plays to the end of the ending
   st = st || {};
   if (scene === 'black') return;                  // a cut to black inside a scene keeps the music going
+  if (scene !== 'jungle32' && EA.loops.birds){ const v = EA.loops.birds; delete EA.loops.birds; v.stop(true); }   /*snd9*/
   const loops = () => Object.keys(EA.loops).length;
   const want = (id, vol) => { if (EA.loops[id]) return; EA.fw = false; for (const k of Object.keys(EA.loops)){ if (k === 'rain') continue; const v = EA.loops[k]; delete EA.loops[k]; v.stop(true); } eldLoopStart(id, vol || .55, true); };
   const rain = on => { if (on){ if (!EA.loops.rain) eldLoopStart('rain', .45, true); } else if (EA.loops.rain){ const v = EA.loops.rain; delete EA.loops.rain; v.stop(true); } };
@@ -34013,6 +34342,7 @@ function eldSceneAudio(scene, st){                /*v7mus6*/ // which cutscene i
   else if (scene === 'bpcamp32' || scene === 'maze32') want('tenseA');
   else if (scene === 'blackwater32') want('tenseB');
   else if (scene === 'bridge32' && (st.bp || st.hide)) want('tenseA', .5);                              // he is on the bridge
+  else if (scene === 'jungle32'){ want('jw'); if (!st.night && !EA.loops.birds) eldLoopStart('birds', .4, false); }   /*snd9*/
   else if (['shelter32', 'river32', 'dock32', 'dock48', 'jungle32', 'bridge32', 'cliff32', 'nest32', 'chart32', 'stones32', 'gate32'].indexOf(scene) >= 0) want('jw');
   else if (['city32', 'gstreet32', 'plaza32', 'plaza', 'goldstreet', 'yarahouse', 'inv', 'elite', 'final48'].indexOf(scene) >= 0) want('city');   // the whole time you are in the city
 }
@@ -34030,6 +34360,7 @@ function eldSfx(k){
     g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(v, t + dur*.3); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
     n.connect(fl); fl.connect(g); g.connect(A.sfx); n.start(t); n.stop(t + dur + .05); };
   if (k === 'plane'){ noise(3.2, 'lowpass', 220, 90, .28); for (let i = 0; i < 12; i++) lead(t + i*.22, 70 + (i % 3)*6, .2, .03, 'sawtooth'); }
+  else if (k === 'gun'){ eldPlayOnce('gun', .9); }   /*snd9*/
   else if (k === 'bang'){ boom(t, .8); noise(.35, 'highpass', 3000, 800, .5); cymbal(t, .25, .5); }
   else if (k === 'growl'){ const o = C.createOscillator(), g = C.createGain(), l = C.createOscillator(), lg = C.createGain();
     o.type = 'sawtooth'; o.frequency.setValueAtTime(78, t); o.frequency.linearRampToValueAtTime(48, t + 1.6); l.frequency.value = 22; lg.gain.value = 18; l.connect(lg); lg.connect(o.frequency);
@@ -34101,7 +34432,7 @@ function storyRun(steps, done){
   };
   const run = s => {
     if (s.scene){ S.scene = s.scene; S.st = Object.assign({}, s.st || {}); S.t0 = performance.now();
-      { /*eldpic2*/ let xl = typeof XL_SCENES !== 'undefined' && XL_SCENES.has(S.scene), hi = HI_SCENES.has(S.scene), w = xl ? XW : hi ? HW : RW, h = xl ? XH : hi ? HH : RH; const pk = eldPicKey(S.scene, S.st); if (pk){ w = 1672; h = 941; } if (cv._w0 == null) cv._w0 = cv.style.width; cv.style.width = pk ? 'min(94vw,calc(52vh*1672/941))' : cv._w0; cv.style.imageRendering = pk ? 'auto' : ''; if (cv.width !== w || cv.height !== h){ cv.width = w; cv.height = h; g.imageSmoothingEnabled = false; } }   // the 32px scenes draw at twice the size, the big ones at three times   // the 32px scenes draw at twice the size
+      { /*eldpic2*/ let xl = typeof XL_SCENES !== 'undefined' && XL_SCENES.has(S.scene), hi = HI_SCENES.has(S.scene), w = xl ? XW : hi ? HW : RW, h = xl ? XH : hi ? HH : RH; const pk = eldPicKey(S.scene, S.st), pd = pk && ELD_PICS[pk].dim; if (pk){ w = pd ? pd[0] : 1672; h = pd ? pd[1] : 941; } if (cv._w0 == null) cv._w0 = cv.style.width; cv.style.width = pk ? 'min(94vw,calc(52vh*' + w + '/' + h + '))' : cv._w0;   /*vl1*/ cv.style.imageRendering = '';   /*noblur*/ if (cv.width !== w || cv.height !== h){ cv.width = w; cv.height = h; g.imageSmoothingEnabled = false; } }   // the 32px scenes draw at twice the size, the big ones at three times   // the 32px scenes draw at twice the size
       cv.style.transition = 'none'; cv.style.opacity = '0'; void cv.offsetWidth; cv.style.transition = 'opacity .45s'; cv.style.opacity = '1'; }
     if (s.st && !s.scene) Object.assign(S.st, s.st);
     if (s.over !== undefined) S.over = s.over;
@@ -34239,7 +34570,7 @@ function eldChapterNico(){
        {t: '"Who are the others?"', then: [Object.assign({t: '"One of them has a ship he should not be able to afford. They call him..."'}, NI)]}
      ], t: 'You lean in.'},
     Object.assign({t: '"Listen. The one with the ship. He is called—"', dur: 2400}, NI),
-    {st: {shot: 1}, sfx: 'bang', flash: 1, shake: 1, nar: 1, t: '', dur: 2000},
+    {st: {shot: 1}, sfx: 'gun', flash: 1, shake: 1, nar: 1, t: '', dur: 2000},   /*snd9*/
     {st: {doorLook: 1}, nar: 1, t: 'Silence. Then a boot on the step outside.', dur: 2600},
     {st: {door: 1}, sfx: 'step', flash: 1, nar: 1, t: 'The door kicks open. A man in a long coat fills it, with the dusk behind him and a smoking pistol in his hand.'},
     Object.assign({t: '"Dead men do not talk, friend. That is the whole point of them."'}, BP),
@@ -34563,12 +34894,13 @@ function my3Hints(){
     {done: ms => has(ms, 'prints'), t: () => 'The drain in the warehouse runs out under the wall. Once you have put the mud and the drain together, the drainage channel opens on your map. The prints in its clay were made after the rain began.'},
     {done: ms => has(ms, 'grave'), t: () => 'Follow the prints. They go down to the riverbank, and somebody has been digging there.'},
     {done: ms => MY3_PROOF.filter(p => has(ms, p)).length >= 3, t: () => 'Five things in this settlement point at the killer and at nobody else, and you only need three. The rope on the captain\'s boat. The nail at the hatch under the warehouse boards. The prints in the channel. The hairs in the captain\'s hand. The neckerchief by the hatch. Go and get three.'},
+    {done: ms => has(ms, 'tornpage') && ms.cards.some(c => /^s_\w+_why$/.test(c)), t: () => 'The WHY is the one answer that is easy to lose a fortune on. Break the person you suspect (show them what you found), then ask them WHY HE WAS IN THEIR WAY. Everybody who has been broken will tell you their own reason, and the killer\'s is the one that matches the captain\'s last page.'},
     {done: ms => has(ms, 'tornpage'), t: () => 'Under the warehouse boards there is a page cut from the captain\'s notebook. His last entry. It says why.'},
     {done: () => false, t: () => 'Whoever it was ties ' + (K.knot === 'boat' ? 'a quick, neat boatman\'s hitch' : 'a fat granny knot') + ', walks in ' + (K.feet === 'hob' ? 'hobnailed boots' : K.feet === 'smooth' ? 'smooth town shoes' : 'bare feet') + ', wears Jonah\'s ' + MY3_COL[K.col] + ' cloth, has ' + L.hair + ' hair and smells of ' + L.smell + '. Look at what you noticed about each of them. Only one fits all of it.'},
     {done: () => false, t: () => 'He died ' + (poison ? 'in his room at the guest house. Black root in his ginger tea, not a blow.' : 'on the dock. A blow from behind, with the missing boat hook.') + ' Say that, and say why, and name the right one.'}
   ];
 }
-function my3Hint(ms){ const H = my3Hints(); for (let i = 0; i < H.length; i++){ if (!H[i].done(ms) && !ms.flags['tip_' + i]) return i; } return -1; }
+function my3Hint(ms){ const H = my3Hints(); for (let i = 0; i < H.length; i++){ if (!H[i].done(ms) && (!ms.flags['tip_' + i] || H[i].done.length === 1)) return i; } return -1; }   /*v73*/ // a step you are still stuck on is told again, free
 /* ---------- what people say ---------- */
 const MY3_MEET = {
   elias: 'An old man is planing a plank in the boathouse. He does not stop when you come in. He does not stop when you speak. When you say the captain\'s name, the plane bites and he swears at it.',
@@ -34578,9 +34910,25 @@ const MY3_MEET = {
   amara: 'A young woman in a blue scarf is at the window of the guest house, watching the dock. She turns round too fast when you come in. "I don\'t know anything," she says, before you have asked.',
   peter: 'A fisherman is sitting on the end of his jetty with a net in his lap. He watches you all the way along the boards. "You\'ll be asking about the captain," he says. "Everybody does. I saw him go."'
 };
+
+const MY3_WHYSAY = {   /*v73*/ // what each of them will say about why the captain was in their way, once broken: the killer tells it the way it really was
+  elias: {money: 'The boathouse is mortgaged to him for the timber. Every plank on that dock is his, on paper. He wanted every coin back before the river, or the boathouse. I won\'t pretend I loved him for it.',
+          revenge: 'My boy went up the river with him twelve years ago. The captain came back down alone. I never asked him what happened to my son. I never needed to.'},
+  mara: {silence: 'He knew what else I sell, and who to. He said the magistrate would hear it all when he went down. I would have hanged for it, and I told him so, quite politely.',
+         fear: 'I watched the black climb his fingers a little further every day. I knew what it was. I begged him to leave that cat where it was. A man like that carries something home that is worse than he is.'},
+  silas: {fear: 'I have been to another place like his. I watched what happened to the men who brought things out of it. He was going to open a door that should stay shut, and I told him so in front of the whole camp.',
+          greed: 'Whoever holds the cat can find the way in. I have guided for thirty years and carried other men\'s treasure all of it. A man gets tired.'},
+  jonah: {money: 'Four hundred I owed him. He would have called it in on the way down: the store, the books, my name. A man can feel his whole life being added up.',
+          greed: 'Blackpowder\'s man has real money. All he wants is a little stone cat that the captain kept turning over in his fingers like a worry bead.'},
+  amara: {revenge: 'My father went up the river with him and the captain came back alone. I was nine. I came here to hear him say why. I will not tell you I had forgiven him.',
+          greed: 'My father paid for that cat. It cost him his hands, and then the rest of him. When I found out what it opens, I decided it was mine.'},
+  peter: {silence: 'Skins. Caiman skins, for the night boat. He saw the sacks and said the magistrate would hear of it. I would have lost the boat, the jetty, the lot.',
+          greed: 'I saw him on the dock turning that cat over in his fingers, and I knew what Blackpowder\'s men pay for a thing like that. I am a poor man, that is all.'}
+};
+const my3WhyOf = (id, T) => id === T.K ? T.why : MY3_PEOPLE[id].mo[0];
 function my3Topics(id, ms){                                                                  // what you can ask: always two, and the truth once you have broken them
   const out = [['captain', 'ABOUT THE CAPTAIN'], ['night', 'THREE NIGHTS AGO']];
-  if (ms.flags['broke_' + id]) out.push(['truth', 'WHAT REALLY HAPPENED']);
+  if (ms.flags['broke_' + id]) out.push(['truth', 'WHAT REALLY HAPPENED'], ['why', 'WHY HE WAS IN THEIR WAY']);   /*v73*/
   if (id === 'mara' && ms.flags.broke_mara) out.push(['hands', 'THE CAPTAIN\'S HANDS']);
   if (id === 'jonah' && ms.flags.ledger_jonah) out.push(['debt', 'THE MONEY']);
   return out;
@@ -34588,6 +34936,7 @@ function my3Topics(id, ms){                                                     
 function my3Say(id, topic){                                                                  // returns {said: card id, t: words}
   const T = my3(), K = T.K, poison = T.method === 'poison', s = (c) => ({said: 's_' + id + '_' + topic, t: c});
   const site = T.site === 'guest' ? 'the guest house' : 'the dock';
+  if (topic === 'why') return s(MY3_WHYSAY[id][my3WhyOf(id, T)]);   /*v73*/
   const L = {
     elias: {captain: 'He left three nights ago. Took his boat upriver. Peter saw him go. That\'s all I know, and I\'ve got work.',
             night: 'I was here. Working. On my own. I sleep here.',
@@ -34617,7 +34966,7 @@ function my3Say(id, topic){                                                     
 }
 function my3Said(cid){                                                                       // a testimony card, from its id
   const m = /^s_(\w+)_(\w+)$/.exec(cid); if (!m) return null;
-  const w = my3Say(m[1], m[2]); return {id: cid, n: my3n(m[1]) + ': ' + {captain: 'ON THE CAPTAIN', night: 'ON THAT NIGHT', truth: 'THE TRUTH, HE SAYS', hands: 'ON HIS HANDS', debt: 'ON THE MONEY'}[m[2]].replace('HE SAYS', MY3_PEOPLE[m[1]].pal.braid ? 'SHE SAYS' : 'HE SAYS'), t: '"' + w.t + '"', kind: 'said'};
+  const w = my3Say(m[1], m[2]); return {id: cid, n: my3n(m[1]) + ': ' + {captain: 'ON THE CAPTAIN', night: 'ON THAT NIGHT', truth: 'THE TRUTH, HE SAYS', hands: 'ON HIS HANDS', debt: 'ON THE MONEY', why: 'WHY HE WAS IN THEIR WAY'}[m[2]].replace('HE SAYS', MY3_PEOPLE[m[1]].pal.braid ? 'SHE SAYS' : 'HE SAYS'), t: '"' + w.t + '"', kind: 'said'};
 }
 /* show somebody something: what breaks whom */
 const MY3_BREAK = {
@@ -34871,7 +35220,11 @@ function my3Play(C){
   const say = (h, t, c) => { tx.innerHTML = (h ? who(h, c || '#e8c070') : '') + '<span style="color:#f2e6c8;white-space:pre-wrap">' + esc(t) + '</span>'; tx.scrollTop = 0; };
   const BTN = 'background:#2a1a08;color:#f2e0b0;border:2px solid #8a6a2a;font-family:inherit;font-size:12px;padding:8px 11px;cursor:pointer';
   const HOT = 'background:#3a1a08;color:#ffd080;border:2px solid #c8802a;font-family:inherit;font-size:12px;padding:8px 11px;cursor:pointer';
-  const add = id => { if (!ms.cards.includes(id)){ ms.cards.push(id); saveGame(); return true; } return false; };
+  const add = id => { if (!ms.cards.includes(id)){ ms.cards.push(id); autoMud(); saveGame(); return true; } return false; };
+  /*v73*/ const autoMud = () => { const c = ms.cards; let made = false;   // the mud from the boat and the drain: the moment you hold both, you put them together
+    if (c.includes('boatmud') && c.includes('drain') && !c.includes('d_mud')){ c.push('d_mud'); made = true; }
+    if (c.includes('d_mud') && !ms.flags.open_channel){ ms.flags.open_channel = 1; made = true; }
+    return made; };
   const status = () => { note.style.display = 'block'; const nF = ms.cards.filter(c => my3Card(c) && my3Card(c).kind === 'found').length, nS = ms.cards.filter(c => /^s_/.test(c)).length, nD = ms.cards.filter(c => /^d_/.test(c)).length;
     note.innerHTML = '<span style="color:#8a7a5a;letter-spacing:.1em">' + nF + ' THINGS FOUND · ' + nS + ' THINGS SAID · ' + nD + ' WORKED OUT</span>' + (ms.items.sheet || ms.items.lens ? ' <span style="color:#e8b64a">· YOU HAVE: ' + ['sheet', 'lens'].filter(k => ms.items[k]).map(k => k === 'sheet' ? 'THE ARTEFACT SHEET' : 'THE CRYSTAL').join(', ') + '</span>' : '') + (ms.tries ? ' <span style="color:#8a5a40">· WRONG ACCUSATIONS: ' + ms.tries + '</span>' : ''); };
   const buttons = () => {
@@ -34897,6 +35250,7 @@ function my3Play(C){
     S.st.view = v; S.st.hot = null; S.st.hotName = ''; S.st.whoX = MY3_WHOX[v] || 0;
     if (v !== 'map' && !ms.seen.includes(v)){ ms.seen.push(v); saveGame(); }
     eldSfx('step');
+    if (v === 'map') autoMud();   /*v73*/
     if (v === 'map') say('', 'São Jerónimo. Click a place to go there.' + (ms.flags.open_channel && !ms.seen.includes('channel') ? ' There is a new way to go: the drainage channel.' : '') + (ms.flags.open_bank && !ms.seen.includes('bank') ? ' The channel runs down to the riverbank.' : ''));
     else { const h = MY3_HOME[v], seen = h ? add('n_' + h) : false; say(MY3_LOCS[v], (h && !ms.met[h] ? MY3_MEET[h] + '\n\n' : '') + 'Click anything that catches your eye' + (h ? ', or talk to ' + my3n(h) + '.' : '.') + (seen ? '\n\n(You take a good look at ' + my3n(h) + ': boots, knots, clothes. It is in your notebook.)' : '')); if (h) ms.met[h] = 1; }
     status(); buttons();
@@ -34921,6 +35275,7 @@ function my3Play(C){
     if (id === 'sheet' && !ms.items.sheet){ ms.items.sheet = 1; extra = '\n\nYOU HAVE THE ARTEFACT SHEET.'; eldSfx('ding'); }
     if (id === 'lens' && !ms.items.lens){ ms.items.lens = 1; extra = '\n\nYOU HAVE THE CRYSTAL LENS.'; eldSfx('shimmer'); }
     if (id === 'drag') extra = '\n\nThe boards at the end of the marks are loose.';
+    if (id === 'drain' || id === 'boatmud'){ if (ms.cards.includes('d_mud')) extra = '\n\nYou put the grey clay from the boat next to the clay round the drain. They are the same. The drain runs out under the wall, and a way opens on your map: THE DRAINAGE CHANNEL.'; else extra = id === 'drain' ? '\n\nThe clay round it is fine as flour, with reed stems in it. Where have you seen clay like that? Look at the captain\'s boat on the dock.' : '\n\nGrey clay, fine as flour, with reed stems in it. That is not river mud. Where else is there clay like that?'; }
     if (id === 'prints') extra = '\n\nThe prints lead on, down the channel, to the riverbank.';
     if (id === 'grave') extra = '\n\nSomething in his fist catches the light.';
     saveGame(); eldSfx(fresh ? 'rustle' : 'step');
@@ -34945,12 +35300,12 @@ function my3Play(C){
     pay.onclick = ev => { ev.stopPropagation();
       const hi = my3Hint(ms);
       if (hi < 0){ log.textContent = my3n(id) + ' pushes your hand away. "You have had everything I know. Everything. Now go and do something with it."'; return; }
-      const cost = SAVE.testAll ? 0 : MY3_TIP;
+      const again = !!ms.flags['tip_' + hi], cost = (SAVE.testAll || again) ? 0 : MY3_TIP;   /*v73*/
       if (SAVE.coins < cost){ log.textContent = my3n(id) + ' looks at what is in your hand and then at you. "That is not enough to be brave on." (It costs ' + MY3_TIP.toLocaleString() + ' coins; you have ' + SAVE.coins.toLocaleString() + '.)'; return; }
       SAVE.coins -= cost; ms.flags['tip_' + hi] = 1; const cid = 't_' + id + '_' + hi; add(cid); saveGame(); try { paintCoins(); } catch (e){}
       eldSfx('ding');
       const open = {elias: 'Elias counts the coins twice and puts them in his apron. "You did not hear this from me," he says, and starts planing again.', mara: 'Mara closes your fingers round nothing and takes the coins without looking at them. She looks at the pot instead.', silas: 'Silas weighs the coins in his hand like cartridges. "Your money," he says. "Your funeral."', jonah: 'Jonah makes the coins disappear before you have finished handing them over, and smiles very widely.', amara: 'Amara takes the coins as if they might be hot, and speaks to the window.', peter: 'Peter looks at the river, not at you, and holds out his hand sideways.'}[id];
-      log.textContent = open + '\n\n' + my3n(id) + ': "' + my3Hints()[hi].t() + '"\n\n(Written in your notebook.)'; status(); };
+      log.textContent = (again ? my3n(id) + ' sighs. "I told you already. No charge. Listen this time."' : open) + '\n\n' + my3n(id) + ': "' + my3Hints()[hi].t() + '"\n\n(Written in your notebook.)'; status(); };
     payRow.append(E('span', 'color:#8a7a5a;font-size:11px;letter-spacing:.1em;white-space:nowrap', 'OR PAY ' + my3n(id) + ' OFF:'), pay);
     p.appendChild(payRow); p.appendChild(log);
   });
@@ -35929,9 +36284,9 @@ function roadBP1(R){
     {nar: 1, t: 'The birds you do not know the names of go quiet as you pass, and start again behind you.'},
     {scene: 'bridge32', st: {mx: 30}, sfx: 'water', nar: 1, t: 'Day two. A gorge, with a rope bridge over it older than anyone alive. The red line goes straight across.'},
     {st: {mx: 30, bp: 1, bpx: 128}, sfx: 'step', nar: 1, t: 'You put one foot on it, and it is already moving. Somebody is coming over from the other side.'},
-    Object.assign({t: wonFirst ? '"Midas. You put me on the floor of a dead man\'s house. I have thought about very little else since."' : '"Still breathing? The river must not want you either."'}, BPW),
+    Object.assign({st: {angle: 2}, t: wonFirst ? '"Midas. You put me on the floor of a dead man\'s house. I have thought about very little else since."' : '"Still breathing? The river must not want you either."'}, BPW),   /*br3*/
     Object.assign({t: '"That map in your hand. I know what it is. Give it here, and walk home."'}, BPW),
-    {who: 'YOU', col: '#9ad0ff', t: 'He is between you and the X. What do you do?', ask: [
+    {who: 'YOU', col: '#9ad0ff', st: {angle: 0}, t: 'He is between you and the X. What do you do?', ask: [
       {t: 'FIGHT HIM', glow: 1, then: [{who: 'YOU', col: '#9ad0ff', t: '"Come and take it."'}, ...caught]},
       {t: 'RUN', then: [{nar: 1, t: 'You turn and run back off the bridge. Which way?', ask: runs}]},
       {t: 'HIDE', then: [{scene: 'black', nar: 1, t: 'You duck out of sight before he reaches your end. Where?', ask: spots}]}
@@ -36014,8 +36369,8 @@ function roadFight(kind){
   BOSS = b; closeShop(); bossMusicStart(b);
   diff = 0; level = LEVELS.length - 1;
   startGame(true);
-  flash = kind === 'anaconda' ? mkFlash('THE ANACONDA', 'THE GUARDIAN RISES. IT IS 2 UP.', '#9ae05a', 3.2)
-        : kind === 'harpy' ? mkFlash('THE HARPY EAGLE', 'THE GUARDIAN STOOPS. IT IS 2 UP.', '#cfe8ff', 3.2)
+  flash = kind === 'anaconda' ? mkFlash('THE ANACONDA', 'THE GUARDIAN RISES. IT STARTS LEVEL.', '#9ae05a', 3.2)
+        : kind === 'harpy' ? mkFlash('THE HARPY EAGLE', 'THE GUARDIAN STOOPS. IT STARTS LEVEL.', '#cfe8ff', 3.2)
         : kind === 'colossus' ? mkFlash('THE GOLDEN COLOSSUS', 'THE LAST GUARDIAN. IT IS 2 UP. JUMP WHEN IT STAMPS.', '#ffd24a', 3.4)
         : mkFlash('BLACKPOWDER', 'NO RUNNING NOW.', '#ff7a5a', 3.2);
   return null;
@@ -36031,7 +36386,7 @@ function roadWon(kind){
     {scene: 'nest32', st: {shot: 'land', eagle: 'land'}, nar: 1, t: 'The eagle comes down on the edge of the nest and folds its wings, and for the first time it does not look at you like food.'},
     {st: {shot: 'eagle', crest: 0}, who: 'THE HARPY EAGLE', col: '#cfe8ff', t: '"You do not fly. But you do not fall, either. That is rarer than you would think."'},
     {st: {shot: 'go', eagle: 'go'}, sfx: 'shimmer', nar: 1, t: 'It opens its wings and goes, and with nothing in the way any more, you can see the whole valley from the top of the cliff.'},
-    {st: {shot: 'valley'}, nar: 1, t: 'On the far side, on a hill of its own, there are stones standing in a ring. Exactly like the captain\'s sketch. The X is right on top of them.'},
+    {scene: 'nest32', st: {shot: 'valley'}, nar: 1, t: 'On the far side, on a hill of its own, there are stones standing in a ring. Exactly like the captain\'s sketch. The X is right on top of them.'},
     {st: {cat: 1}, sfx: 'ding', nar: 1, t: 'In your pocket, the little stone cat has gone warm.'},
     {scene: 'black', who: 'THE ROAD TO EL DORADO', col: '#e8b64a', t: 'THE GUARDIANS OF THE MAP ARE BEATEN. THE STANDING STONES ARE IN SIGHT. THE ROAD CONTINUES SOON.', auto: 3800}];
   if (kind === 'bp1') return [
@@ -36266,26 +36621,26 @@ function roadStones(){
     {scene: 'stones32', st: {mx: 70}, sfx: 'shimmer', nar: 1, t: 'At the top: stones standing in a ring, taller than a man, older than anything the captain ever saw. Exactly as he drew them.'},
     {nar: 1, t: 'In the middle, an altar. And cut into the top of the altar, a hollow. A small one. Shaped like a sitting cat.'},
     ...(b2 !== 'fight' ? [{st: {mx: 70, smoke: 1}, nar: 1, t: 'Far back down the valley, a thread of smoke goes up from a campfire. Blackpowder is still coming.'}] : []),
-    {who: 'YOU', col: '#9ad0ff', t: 'The stone cat has not been cold since the cliff. You take it out of your pocket.', ask: [{t: 'PUT THE STONE CAT ON THE ALTAR', glow: 1, then: []}]},
+    {scene: 'stones32', st: {angle: 1}, who: 'YOU', col: '#9ad0ff', t: 'The stone cat has not been cold since the cliff. You take it out of your pocket.', ask: [{t: 'PUT THE STONE CAT ON THE ALTAR', glow: 1, then: []}]},
     {st: {mx: 80, cat: 1}, sfx: 'step', nar: 1, t: 'It fits exactly, as if the hollow had been cut around it.'},
     {st: {mx: 70, cat: 1, spin: 1}, sfx: 'shimmer', nar: 1, t: 'Then it turns. By itself. Slowly, and then faster, grinding round in its hollow, and its gold-fleck eyes begin to glow.', auto: 2800},
-    {st: {mx: 70, cat: 1, spin: 1, point: 1}, sfx: 'ding', nar: 1, t: 'It stops dead. It is looking north-east, and out of its eyes a line of light goes across the whole valley, to a cliff on the far side.'},
+    {scene: 'stones32', st: {angle: 3}, sfx: 'ding', nar: 1, t: 'It stops dead. It is looking north-east, and out of its eyes a line of light goes across the whole valley, to a cliff on the far side.'},
     {nar: 1, t: 'Where the light lands, something in the cliff flashes back, the way only gold does.'},
     {who: 'YOU', col: '#9ad0ff', t: 'You take the cat back out of the altar. It is hot now. You follow the line.'},
     {scene: 'gate32', st: {shot: 'approach'}, sfx: 'step', nar: 1, t: 'Night, then morning. At the foot of the cliff there is a gate. Two doors of beaten gold, twice the height of a house, shut fast.'},
-    {st: {shot: 'doors'}, sfx: 'shimmer', nar: 1, t: 'A sun is hammered across both doors, split down the middle where they meet. No handle. No lock. Nothing to push.'},
-    {st: {shot: 'tilt'}, nar: 1, t: 'Beside it, on a plinth, a statue: a giant of gold, with a sun on its chest and a crown of rays, green at the edges and grown over with vines. It is not a statue.'},
-    {st: {shot: 'eyes', wake: 1}, sfx: 'growl', shake: 1, nar: 1, t: 'Its eyes open.', auto: 2400},
-    {st: {shot: 'wake'}, sfx: 'pounce', shake: 1, nar: 1, t: 'It steps down off the plinth, and the cliff sheds stones like a dog shaking off water.'},
-    {st: {shot: 'over', talk: 1}, who: 'THE GOLDEN COLOSSUS', col: '#ffd24a', t: '"THE CAT. THE SNAKE. THE BIRD. ALL OF THEM LET YOU BY. I DO NOT LET ANYONE BY. I AM THE DOOR."'},
-    {st: {shot: 'eyes', talk: 1}, who: 'THE GOLDEN COLOSSUS', col: '#ffd24a', t: '"YOU WANT GOLD, LITTLE MAN? HERE. HAVE ALL OF IT."'},
+    {scene: 'gate32', st: {shot: 'doors'}, sfx: 'shimmer', nar: 1, t: 'A sun is hammered across both doors, split down the middle where they meet. No handle. No lock. Nothing to push.'},
+    {scene: 'gate32', st: {shot: 'tilt'}, nar: 1, t: 'Beside it, on a plinth, a statue: a giant of gold, with a sun on its chest and a crown of rays, green at the edges and grown over with vines. It is not a statue.'},
+    {scene: 'gate32', st: {shot: 'eyes', wake: 1}, sfx: 'growl', shake: 1, nar: 1, t: 'Its eyes open.', auto: 2400},
+    {scene: 'gate32', st: {shot: 'wake', awake: 1}, sfx: 'pounce', shake: 1, nar: 1, t: 'It steps down off the plinth, and the cliff sheds stones like a dog shaking off water.'},
+    {scene: 'gate32', st: {shot: 'over', talk: 1, awake: 1}, who: 'THE GOLDEN COLOSSUS', col: '#ffd24a', t: '"THE CAT. THE SNAKE. THE BIRD. ALL OF THEM LET YOU BY. I DO NOT LET ANYONE BY. I AM THE DOOR."'},
+    {scene: 'gate32', st: {shot: 'eyes', talk: 1, awake: 1}, who: 'THE GOLDEN COLOSSUS', col: '#ffd24a', t: '"YOU WANT GOLD, LITTLE MAN? HERE. HAVE ALL OF IT."'},
     {scene: 'black', fn: () => { e.stage = Math.max(e.stage || 0, 11); saveGame(); }, nar: 1, t: 'THE LAST GUARDIAN', auto: 1600}
   ];
 }
 function roadColossus(){
   return [
     {scene: 'gate32', st: {shot: 'approach', noBeam: 1, wake: 1}, sfx: 'growl', nar: 1, t: 'Back at the Sun Gate. The colossus is standing where it left you, as if it never moved.'},
-    {st: {shot: 'over', talk: 1}, who: 'THE GOLDEN COLOSSUS', col: '#ffd24a', t: '"AGAIN, LITTLE MAN? GOOD. I HAVE NOTHING ELSE TO DO."'},
+    {scene: 'gate32', st: {shot: 'over', talk: 1, awake: 1}, who: 'THE GOLDEN COLOSSUS', col: '#ffd24a', t: '"AGAIN, LITTLE MAN? GOOD. I HAVE NOTHING ELSE TO DO."'},
     {scene: 'black', nar: 1, t: 'THE LAST GUARDIAN', auto: 1400}
   ];
 }
@@ -36293,9 +36648,9 @@ function roadColossusWon(){
   const e = eld();
   return [
     {scene: 'gate32', st: {shot: 'kneel', kneel: 1, wake: 1, noBeam: 1}, sfx: 'pounce', shake: 1, nar: 1, t: 'The colossus goes down on one knee, and the whole cliff shakes with it.'},
-    {st: {shot: 'eyes', talk: 1}, who: 'THE GOLDEN COLOSSUS', col: '#ffd24a', t: '"FIVE HUNDRED YEARS, AND NOBODY. THEN A MAN WHO WANTS GOLD SO BADLY HE WALKED THROUGH ALL OF US TO GET IT."'},
-    {st: {shot: 'kneel', talk: 1}, who: 'THE GOLDEN COLOSSUS', col: '#ffd24a', t: '"GO IN, THEN. YOU WILL FIND OUT WHAT IT IS LIKE, TO GET WHAT YOU WANTED."'},
-    {st: {shot: 'open', talk: 0, open: 1}, sfx: 'drone', nar: 1, t: 'Behind it, the two doors of the Sun Gate grind open, and light comes out of them like heat from an oven.', auto: 3400},
+    {scene: 'gate32', st: {shot: 'eyes', talk: 1, awake: 1, kneel: 1}, who: 'THE GOLDEN COLOSSUS', col: '#ffd24a', t: '"FIVE HUNDRED YEARS, AND NOBODY. THEN A MAN WHO WANTS GOLD SO BADLY HE WALKED THROUGH ALL OF US TO GET IT."'},
+    {scene: 'gate32', st: {shot: 'kneel', talk: 1, awake: 1, kneel: 1}, who: 'THE GOLDEN COLOSSUS', col: '#ffd24a', t: '"GO IN, THEN. YOU WILL FIND OUT WHAT IT IS LIKE, TO GET WHAT YOU WANTED."'},
+    {scene: 'gate32', st: {shot: 'open', open: 1}, sfx: 'drone', nar: 1, t: 'Behind it, the two doors of the Sun Gate grind open, and light comes out of them like heat from an oven.', auto: 3400},
     {scene: 'city32', st: {shot: 'reveal'}, sfx: 'shimmer', nar: 1, t: '', auto: 3000},
     {nar: 1, big: 1, t: 'EL DORADO', dur: 3200},
     {st: {shot: 'wide'}, nar: 1, t: 'A city in the bowl of a crater, and all of it gold. Roofs, walls, steps, the paving in the streets. A lake as blue as the crystal. And on top of the great pyramid, so bright you cannot look straight at it: a sun.'},
@@ -38460,7 +38815,7 @@ const NEST_MAP = {
     for (let i = 0; i < 6; i++){ const x = srnd(i + 20)*BW, y = HZ + 10 + srnd(i + 21)*(BH - HZ - 20); P(x, y, 5, 1, '#6a4a2c'); P(x + 1, y + 1, 4, 1, '#5a4028'); }
   }
 };
-const ANACONDA_BOSS = {id: 'anaconda', skin: 'anaconda', n: 'THE ANACONDA', lvl: 1, fee: 0, head: 2, cd: .30, size: 1.16, quest: 3, noMods: 1, mapObj: BLACKWATER_MAP,
+const ANACONDA_BOSS = {id: 'anaconda', skin: 'anaconda', n: 'THE ANACONDA', lvl: 1, fee: 0, head: 0, cd: .30, size: 1.16, quest: 3, noMods: 1, mapObj: BLACKWATER_MAP,
   ai: {tick: .53, react: .55, err: .38, steal: 1.18, block: 1.2, quick: 40, patience: .66},
   w: 'The guardian of the black water.', tell: 'Starts two up. Coils whoever is nearest the ball, and spits venom that slows you to a crawl.'};
 /* ============================ THE HIGH NEST, PAINTED: the court you fight the harpy eagle on ============================
@@ -38471,7 +38826,7 @@ const ANACONDA_BOSS = {id: 'anaconda', skin: 'anaconda', n: 'THE ANACONDA', lvl:
 const NEST_ART = {ok: false, img: null, IW: 1508, IH: 736, FY: 527, SQ: .8, cache: null, ckey: ''};
 (function(){
   const im = new Image(); im.onload = () => { NEST_ART.img = im; NEST_ART.ok = true; };
-  im.src = ART[63];
+  im.src = ART[73];
 })();
 function nestG(){
   const sx = (BW + OS*2)/NEST_ART.IW, sy = Math.max(sx*NEST_ART.SQ, (HZ + OS + 2)/NEST_ART.FY);
@@ -38596,7 +38951,7 @@ function nestFx(g, im){
   };
 })();
 
-const HARPY_BOSS = {id: 'harpy', skin: 'harpy', n: 'THE HARPY EAGLE', lvl: 1, fee: 0, head: 2, cd: .30, size: 1.1, quest: 4, noMods: 1, mapObj: NEST_MAP,
+const HARPY_BOSS = {id: 'harpy', skin: 'harpy', n: 'THE HARPY EAGLE', lvl: 1, fee: 0, head: 0, cd: .30, size: 1.1, quest: 4, noMods: 1, mapObj: NEST_MAP,
   ai: {tick: .5, react: .53, err: .35, steal: 1.2, block: 1.3, quick: 42, patience: .68},
   w: 'The guardian of the high nest.', tell: 'Starts two up. Drops out of the sky on whoever has the ball, and rides the wind to block at the ring.'};
 /* ============================ THE GOLDEN COLOSSUS ============================
