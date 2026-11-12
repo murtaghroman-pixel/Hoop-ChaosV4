@@ -36371,7 +36371,7 @@ function roadFight(kind){
   startGame(true);
   flash = kind === 'anaconda' ? mkFlash('THE ANACONDA', 'THE GUARDIAN RISES. IT STARTS LEVEL.', '#9ae05a', 3.2)
         : kind === 'harpy' ? mkFlash('THE HARPY EAGLE', 'THE GUARDIAN STOOPS. IT STARTS LEVEL.', '#cfe8ff', 3.2)
-        : kind === 'colossus' ? mkFlash('THE GOLDEN COLOSSUS', 'THE LAST GUARDIAN. IT IS 2 UP. JUMP WHEN IT STAMPS.', '#ffd24a', 3.4)
+        : kind === 'colossus' ? mkFlash('THE GOLDEN COLOSSUS', 'THE LAST GUARDIAN. JUMP WHEN IT STAMPS.', '#ffd24a', 3.4)
         : mkFlash('BLACKPOWDER', 'NO RUNNING NOW.', '#ff7a5a', 3.2);
   return null;
 }
@@ -39032,7 +39032,7 @@ const SUNGATE_MAP = {
     for (let i = 0; i < 50; i++){ const y = HZ + 4 + srnd(i + 9)*(BH - HZ - 6), x = srnd(i)*BW; P(x, y, 1, 1, (T*3 + i) % 4 < 1 ? 'rgba(255,240,160,.7)' : 'rgba(255,220,120,.25)'); }
   }
 };
-const COLOSSUS_BOSS = {id: 'colossus', skin: 'colossus', n: 'THE GOLDEN COLOSSUS', lvl: 1, fee: 0, head: 2, cd: .30, size: 1.34, quest: 6, noMods: 1, mapObj: SUNGATE_MAP,
+const COLOSSUS_BOSS = {id: 'colossus', skin: 'colossus', n: 'THE GOLDEN COLOSSUS', lvl: 1, fee: 0, head: 0, cd: .30, size: 1.34, quest: 6, noMods: 1, mapObj: SUNGATE_MAP,
   ai: {tick: .48, react: .5, err: .33, steal: 1.25, block: 1.35, quick: 44, patience: .7},
   w: 'The last guardian, beside the Sun Gate.', tell: 'Starts two up. Turns the ball to solid gold so you cannot shoot from range, and stamps to knock you off your feet. Jump when it stamps.'};
 /* ============================ THE FIVE ELITES OF EL DORADO ============================
