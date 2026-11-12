@@ -3808,7 +3808,7 @@ function bossMusicStop(){                               // fade it out, then han
 }
 function bgmStart(){
   if (!A.started || !A.on || !A.musicOn) return;
-  try { if (storyBox) return; } catch (e){}   /*v71*/ // inside a quest scene the lobby track stays off, whatever scene it is
+  try { if (storyBox || diaryBox || BM.el) return; } catch (e){}   /*v71*/ // and while a boss or quest-fight track is on, a tap must not bring the lobby tune back over it // inside a quest scene the lobby track stays off, whatever scene it is
   const want = musicChoice();
   playTrack(want === 'shuffle' ? (bgmId || pick(TRACKS).id) : trackById(want).id);
 }
@@ -29825,7 +29825,7 @@ function eldReturnCat(){
   return null;
 }
 /*part4*/ /* ============================ PART FOUR: THE KING OF EL DORADO ============================
-   Four chapters of ruling the city, each with a decree that is yours, then Blackpowder comes back with a flag and a plan.
+   Four chapters of ruling the city, each with a decree that is yours, then Blackpowder comes back with a flag and a plan, and leaves without a fight.
    e.p4 = {day: chapters done (0-4), c: {gold, five, sun, bp}, done}. */
 function p4State(){ const e = eld(); e.p4 = e.p4 || {day: 0, c: {}}; e.p4.c = e.p4.c || {}; return e.p4; }
 function p4Pick(k, v){ return () => { const p = p4State(); p.c[k] = v; saveGame(); }; }
@@ -29872,23 +29872,22 @@ function p4Chapter(day){
       {nar: 1, sfx: 'step', t: 'You go down to the water by yourself. He holds out half the orange, without looking round.'},
       Object.assign({t: '"Three times. I have been thinking about it for a month, your majesty. It is a very small number. I would have said four."'}, BPW),
       Object.assign({t: '"I am not here for the Sun. I know what the Sun is. I am here for the thing I came for before I knew."'}, BPW),
-      Object.assign({t: '"One more. On the top step, with the barrels lit, and nobody to stop it. If I lose, I sail. If I win, I do not take the city. I take a gold band, and I carry it up the stairs myself, and I put it on."'}, BPW),
+      Object.assign({t: '"One more thing, and then I sail. On the top step, in front of the whole city, I carry a gold band up the stairs myself, and you tell them what it is. Nobody stops me. Nobody fights me. I want them to see it once."'}, BPW),
       {who: 'THE KING', col: '#ffd24a', t: 'What is your decree?', ask: [
-        {t: '"Agreed. One game, at the top. Everyone in the city gets to watch."', then: [Object.assign({fn: p4Pick('bp', 'yes')}, K('"On the top step. At dusk. Every window in the city."')), Object.assign({t: '"Now, that is the right answer."'}, BPW)]},
-        {t: '"You are a thief. You do not get a game. You get a boat out of here, and one chance to take it."', then: [Object.assign({fn: p4Pick('bp', 'no')}, K('"No. You get the boat, and the rest of the day to take it. But I will meet you on the stair, because you asked in the open."')), Object.assign({t: '"...That is even better. Thank you."'}, BPW)]}
+        {t: '"Agreed. Up the stair, in the open. Everyone in the city gets to watch."', then: [Object.assign({fn: p4Pick('bp', 'yes')}, K('"On the top step. At dusk. Every window in the city."')), Object.assign({t: '"Now, that is the right answer."'}, BPW)]},
+        {t: '"You are a thief. You do not get a ceremony. You get a boat out of here, and one chance to take it."', then: [Object.assign({fn: p4Pick('bp', 'no')}, K('"No. You get the boat, and the rest of the day to take it. But I will meet you on the stair, because you asked in the open."')), Object.assign({t: '"...That is even better. Thank you."'}, BPW)]}
       ]},
-      {scene: 'black', fn: () => { }, nar: 1, t: 'DUSK. THE LAST GAME. THE KING OF EL DORADO AGAINST BLACKPOWDER, ON THE TOP STEP.', auto: 3200}
+      {scene: 'black', fn: () => { }, nar: 1, t: 'DUSK. BLACKPOWDER CLIMBS THE STAIR. EVERY WINDOW IN THE CITY IS WATCHING.', auto: 3200}
     ]
   }[day];
   return ch ? ch() : [];
 }
-function p4Rematch(){
-  const b = Object.assign({}, BOSS_BY_ID.pirate, {id: 'final_bp2', quest: 8, rematch: 1, fee: 0, head: 0, n: 'BLACKPOWDER, RETURNED', noMods: 1, mapObj: FINAL_MAP,
-    ai: {tick: .46, react: .48, err: .32, steal: 1.25, block: 1.25, quick: 42, patience: .55}});
-  finalReset(); FINAL.ks = 1; BOSS = b; closeShop(); bossMusicStart(b);
-  diff = 0; level = LEVELS.length - 1;
-  startGame(true);
-  flash = mkFlash('BLACKPOWDER, RETURNED', 'ONE MORE. THE SUN IS YOURS.', '#ffd24a', 3.4);
+function p4Finish(){   /*v72*/ // no second Blackpowder: the last day goes straight to how the reign ended. Written down first, so LEAVE cannot lose it.
+  const e = eld(), p = p4State(); p.day = 5; p.done = 1;
+  if (!p.paid){ p.paid = 1; p.paid2 = 1; SAVE.coins = (SAVE.coins | 0) + 500000;   // the whole of Part Four pays 500,000 coins and 10,000 XP, once
+    const before = myLevel(); SAVE.xp = (SAVE.xp || 0) + 10000; const after = myLevel(); if (after > before) setTimeout(() => { try { startLevelUp(before, after); } catch (er){} }, 4000); }
+  saveGame(); try { paintCoins(); } catch (er){}
+  storyRun(p4Epilogue().concat([{scene: 'black', nar: 1, t: 'THE KING\'S THANKS: 500,000 COINS AND 10,000 XP.', auto: 3200}]), () => eldOpenHut());
   return null;
 }
 function p4Epilogue(){
@@ -29903,7 +29902,7 @@ function p4Epilogue(){
     {nar: 1, t: sun},
     Object.assign({t: '"Your majesty. There is a boat at the dock, and a stone cat in a bag, and a man called Nico who is still waiting at a house in a village by a river."'}, YARA),
     K('"...Yes. I know. Tell them I am coming back. Tell them the Sun is not a mirror, and not a god. It is just the first thing everybody here ever saw."'),
-    {scene: 'black', fn: () => { const e = eld(); e.p4 = p4State(); e.p4.day = 5; e.p4.done = 1; if (!e.p4.paid){ e.p4.paid = 1; SAVE.coins = (SAVE.coins | 0) + 1000000; } saveGame(); try { paintCoins(); } catch (er){} }, who: 'THE ROAD TO EL DORADO', col: '#e8b64a', t: 'PART FOUR IS OVER. THE KING OF EL DORADO RULES, AND THE CITY IS HIS. 1,000,000 COINS HAVE BEEN LEFT AT LA STREGA\'S TABLE.', auto: 5600}
+    {scene: 'black', fn: () => { const e = eld(); e.p4 = p4State(); e.p4.day = 5; e.p4.done = 1; if (!e.p4.paid){ e.p4.paid = 1; SAVE.coins = (SAVE.coins | 0) + 500000; } saveGame(); try { paintCoins(); } catch (er){} }, who: 'THE ROAD TO EL DORADO', col: '#e8b64a', t: 'PART FOUR IS OVER. THE KING OF EL DORADO RULES, AND THE CITY IS HIS. 500,000 COINS HAVE BEEN LEFT AT LA STREGA\'S TABLE.', auto: 5600}
   ];
 }
 function eldReign(){
@@ -29913,8 +29912,8 @@ function eldReign(){
   const day = p.day || 0;
   closeShop();
   if (p.done) return eldReignReview();
-  if (day >= 4){ p4Rematch(); return null; }
-  if (day === 3){ storyRun(p4Chapter(4), left => { if (left) return eldOpenHut(); p4State().day = 4; saveGame(); p4Rematch(); }); return null; }
+  if (day >= 4) return p4Finish();
+  if (day === 3){ storyRun(p4Chapter(4), left => { if (left) return eldOpenHut(); p4State().day = 4; saveGame(); p4Finish(); }); return null; }
   storyRun(p4Chapter(day + 1), left => { if (!left){ p.day = Math.max(p.day || 0, day + 1); saveGame(); } eldOpenHut(); });
   return null;
 }
@@ -29947,6 +29946,7 @@ function finishFinal(b, winId){
   const took = winId === mySide(), e = eld();
   SAVE.played = (SAVE.played || 0) + 1; if (took) SAVE.wins = (SAVE.wins || 0) + 1;
   e.lost = took ? null : 'final';
+  if (took && !b.rematch){ e.stage = Math.max(e.stage || 0, 15); e.freed = 1; e.king = 1; e.kingOn = 1; try { kingNameSync(); } catch (er){} }   /*v72*/ // the win is written down the moment it happens, not at the end of a cutscene somebody can LEAVE
   awardXp(winId); saveGame(); paintCoins();
   flash = mkFlash(took ? 'BLACKPOWDER IS BEATEN' : 'HE THROWS YOU DOWN', took ? 'EL DORADO IS FREE' : 'THE STAIR IS LONG', took ? '#ffd24a' : '#ff8a7a', 3.2);
   if (b.rematch){ FINAL.ks = 0; setTimeout(() => { goTitle(); storyRun(took ? p4Epilogue() : [{scene: 'final48', st: {shot: 'thrown'}, sfx: 'bang', shake: 6, nar: 1, t: 'He gets you on the last barrel. You are not thrown, this time. You are helped up, and he does not say a word.', auto: 3600}, Object.assign({t: '"Again, when you like, your majesty."'}, BPW)], () => eldOpenHut()); }, 2800); return; }   /*part4*/
@@ -34051,8 +34051,10 @@ let storyBox = null;
 function eldCss(){ if (document.getElementById('eldCss')) return; const st = document.createElement('style'); st.id = 'eldCss';
   st.textContent = '@keyframes eldGlow{0%,100%{box-shadow:0 0 6px 1px rgba(255,200,70,.35);filter:brightness(1)}50%{box-shadow:0 0 22px 7px rgba(255,210,80,.85);filter:brightness(1.25)}}.eldGlow{animation:eldGlow 1.3s ease-in-out infinite!important;border-color:#ffd24a!important;color:#fff0b0!important}';
   document.head.appendChild(st); }
+function eldQuietEnd(){ setTimeout(() => { if (storyBox || diaryBox) return; EA.qWas = false; if (!BM.el) bgmStart(); }, 700); }   /*v71*/
 function storyClose(){ const wasOpen = !!storyBox; eldAudioStop(); if (storyBox){ clearInterval(storyBox._anim); clearTimeout(storyBox._timer); clearInterval(storyBox._type); storyBox.remove(); storyBox = null; }
-  if (wasOpen && EA.qWas){ EA.qWas = false; bgmStart(); }   /*v71*/ }
+  if (wasOpen && EA.qWas) eldQuietEnd();   /*v71*/ // a fight may follow straight on: give it the room first
+}
 function storyRun(steps, done){
   storyClose(); eldCss();
   const E = (tag, css, txt) => { const e = document.createElement(tag); if (css) e.style.cssText = css; if (txt != null) e.textContent = txt; return e; };
@@ -34475,7 +34477,7 @@ const MY3_PAY = {fish: 'a string of dried fish', cartridges: 'a handful of rifle
 const MY3_PROOF = ['knot', 'hatchthread', 'prints', 'hairs', 'neck'];
 const MY3_LOOK = {elias: {hair: 'grey', hc: '#9a9a9a', smell: 'pitch and pipe smoke'}, mara: {hair: 'black', hc: '#0e0a08', smell: 'woodsmoke and crushed herbs'}, silas: {hair: 'dark brown', hc: '#4a3018', smell: 'gun oil'},
   jonah: {hair: 'chestnut', hc: '#7a4a22', smell: 'lamp oil and cheap cologne'}, amara: {hair: 'black', hc: '#0e0a08', smell: 'rosewater'}, peter: {hair: 'black', hc: '#0e0a08', smell: 'fish and river weed'}};
-const MY3_TIP = 1000;
+const MY3_TIP = 10000;
 let MY3_CACHE = null;
 function my3(){                                                                            // the truth, first; everything else is built on it
   const e = eld(), seed = ((e.seed || 1)*13 + 1951) >>> 0;
@@ -36972,7 +36974,7 @@ function cityHub(box, E, btn){
   if ((e.stage || 0) >= 15){ ppl.textContent = 'EL DORADO IS FREE · BLACKPOWDER IS BEATEN' + (e.king ? ((e.p4 || {}).done ? ' · YOU RULE EL DORADO' : ' · PART FOUR: THE KING OF EL DORADO') : '');
     if (e.king) btn(e.kingOn ? 'FORM: THE KING OF EL DORADO (TAP FOR MIDAS)' : 'FORM: MIDAS (TAP FOR THE KING OF EL DORADO)', 'eldKingForm', 0, () => { e.kingOn = e.kingOn ? 0 : 1; saveGame(); try { paintShop(); } catch (er){} return null; });   /*king*/
     if (!e.catBack) btn('RETURN THE STONE CAT TO LA STREGA', 'eldCatBack', 1, eldReturnCat);   /*catback*/
-    if (e.king){ const p4 = e.p4 || {day: 0}, lbl = p4.done ? 'THE KING\'S REIGN: WHAT YOU DECIDED' : p4.day >= 4 ? 'PART FOUR: BLACKPOWDER, RETURNED' : 'PART FOUR: RULE EL DORADO (DAY ' + ((p4.day || 0) + 1) + ' OF 4)'; btn(lbl, 'eldReign', 1, eldReign); }   /*part4*/
+    if (e.king){ const p4 = e.p4 || {day: 0}, lbl = p4.done ? 'THE KING\'S REIGN: WHAT YOU DECIDED' : p4.day >= 4 ? 'PART FOUR: THE LAST DAY' : 'PART FOUR: RULE EL DORADO (DAY ' + ((p4.day || 0) + 1) + ' OF 4)'; btn(lbl, 'eldReign', 1, eldReign); }   /*part4*/
     btn('LOOK DOWN ON THE CITY', 'eldCityView', 0, () => { closeShop(); storyRun([{scene: 'final48', st: {shot: 'dawn'}, sfx: 'shimmer', nar: 1, t: 'Morning over El Dorado. Nobody carries the gold any more. The Sun hangs over an empty throne. Somewhere far down the river, a stone cat is waiting to go home.'}], () => eldOpenHut()); return null; }); return; }
   if ((e.stage || 0) >= 14){
     if (e.lost === 'final'){ btn('BRIBE THE GUARD ON THE STAIR: ' + bribe, 'eldFinalBribe', 1, eldFinalBribe); return; }
@@ -37016,10 +37018,11 @@ function eldDiary(done){
   };
   prev.onclick = () => { if (page){ page--; show(); } };
   next.onclick = () => { if (page < PG.length - 1){ page++; show(); } };
-  shut.onclick = () => { box.remove(); diaryBox = null; const e = eld(); e.read = 1; saveGame(); if (done) done(); };
+  shut.onclick = () => { box.remove(); diaryBox = null; const e = eld(); e.read = 1; saveGame(); if (EA.qWas) eldQuietEnd(); if (done) done(); };   /*v71*/
   nav.append(prev, num, next);
   card.append(cv, h, tx, nav, shut); shut.style.marginTop = '10px'; shut.style.width = '100%';
   box.appendChild(card); document.body.appendChild(box);
+  if (!EA.qWas){ EA.qWas = !!A.musicOn; } bgmStop();   /*v71*/ // the captain's diary has no lobby tune under it either
   show();
 }
 function eldReset(){ SAVE.eld = {}; saveGame(); }
